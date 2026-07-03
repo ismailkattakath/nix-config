@@ -11,14 +11,14 @@ A single Nix flake that manages complete, reproducible system configurations acr
 
 ## What it manages
 
-| Host | Platform | System | Role |
-|------|----------|--------|------|
-| `nixcon` | macOS via [nix-darwin](https://github.com/LnL7/nix-darwin) | `aarch64-darwin` | Apple Silicon Mac |
-| `nixtel` | macOS via [nix-darwin](https://github.com/LnL7/nix-darwin) | `x86_64-darwin` | Apple Intel Mac |
-| `nixarm` | NixOS VM (UTM / QEMU) | `aarch64-linux` | Local Linux VM |
-| `nixamd` | NixOS | `x86_64-linux` | x86_64 NixOS host (config-only / CI-eval) |
-| `nixrpi` | NixOS on Raspberry Pi 4 | `aarch64-linux` | Headless Pi |
-| devcontainer | Nix-built OCI image | multi-arch | Reproducible dev environment |
+| Host | Type | System | Machine |
+|------|------|--------|---------|
+| `nixcon` | [nix-darwin](https://github.com/LnL7/nix-darwin) | `aarch64-darwin` | Apple Silicon Mac |
+| `nixtel` | [nix-darwin](https://github.com/LnL7/nix-darwin) | `x86_64-darwin` | Apple Intel Mac |
+| `nixarm` | NixOS | `aarch64-linux` | Linux VM (UTM / QEMU) |
+| `nixamd` | NixOS | `x86_64-linux` | Linux host (config-only — no hardware yet) |
+| `nixrpi` | NixOS | `aarch64-linux` | Raspberry Pi 4 |
+| `devcontainer` | OCI image | multi-arch | Dev container (published to GHCR) |
 
 User environments are layered on with [Home-Manager](https://github.com/nix-community/home-manager), and the devcontainer image is prebuilt and published to GHCR so it starts with a warm Nix store.
 
