@@ -211,11 +211,15 @@ dockerTools.streamLayeredImage {
     mkdir -p lib lib64
     ln -sf ${pkgs.glibc}/lib/${loaderInfo.name} ${loaderInfo.libDir}/${loaderInfo.name}
     # Also mirror into the sibling dir (/lib <-> /lib64) for binaries that probe it.
-    ${lib.optionalString (loaderInfo.libDir == "lib") ''
-      ln -sf ${pkgs.glibc}/lib/${loaderInfo.name} lib64/${loaderInfo.name}
-    ''}${lib.optionalString (loaderInfo.libDir == "lib64") ''
-      ln -sf ${pkgs.glibc}/lib/${loaderInfo.name} lib/${loaderInfo.name}
-    ''}
+    ${
+      lib.optionalString (loaderInfo.libDir == "lib") ''
+        ln -sf ${pkgs.glibc}/lib/${loaderInfo.name} lib64/${loaderInfo.name}
+      ''
+    }${
+      lib.optionalString (loaderInfo.libDir == "lib64") ''
+        ln -sf ${pkgs.glibc}/lib/${loaderInfo.name} lib/${loaderInfo.name}
+      ''
+    }
 
     # Resolve libstdc++.so.6 / libgcc_s.so.1 (needed by the server node once the
     # loader runs) via an ldconfig CACHE — NOT a global LD_LIBRARY_PATH, which
