@@ -291,18 +291,22 @@ jobs:
       - name: Guard — foreign glibc binary (VS Code Server node) executes
         run: |
           set -euo pipefail
-          ARCH="${{ matrix.arch }}"          # amd64 | arm64 — matches server-linux-<arch>
+          ARCH="${{ matrix.arch }}"          # amd64 | arm64 (Docker/OCI arch name)
+          # VS Code server uses its OWN arch labels (x64, not amd64) in the download
+          # path — and glibc names its loader per-arch. Map both from the matrix arch.
           case "$ARCH" in
-            amd64) LOADER_GLOB='/lib64/ld-linux-x86-64.so.2' ;;
-            arm64) LOADER_GLOB='/lib/ld-linux-aarch64.so.1'  ;;
+            amd64) VSARCH='x64';   LOADER_GLOB='/lib64/ld-linux-x86-64.so.2' ;;
+            arm64) VSARCH='arm64'; LOADER_GLOB='/lib/ld-linux-aarch64.so.1'  ;;
             *) echo "✗ unknown matrix arch $ARCH"; exit 1 ;;
           esac
 
           # Fetch the REAL VS Code Server (the foreign generic-glibc payload the
-          # devcontainer runtime downloads at connect time) for this arch.
-          echo "::group::download VS Code Server (server-linux-${ARCH})"
+          # devcontainer runtime downloads at connect time) for this arch. The
+          # /latest/server-linux-<vsarch>/stable endpoint 302-redirects to the
+          # current stable tarball; -L follows it.
+          echo "::group::download VS Code Server (server-linux-${VSARCH})"
           curl -fSL --retry 3 -o /tmp/vscode-server.tgz \
-            "https://update.code.visualstudio.com/latest/server-linux-${ARCH}/stable"
+            "https://update.code.visualstudio.com/latest/server-linux-${VSARCH}/stable"
           mkdir -p /tmp/vscs && tar -xzf /tmp/vscode-server.tgz -C /tmp/vscs
           NODE="$(find /tmp/vscs -maxdepth 2 -type f -name node | head -1)"
           test -n "$NODE" || { echo "✗ could not locate bundled node in VS Code Server"; exit 1; }
