@@ -28,8 +28,19 @@ let
   # `nixpkgs.config.allowUnfree` — the input's `.extensions` output uses its own
   # nixpkgs with default config and ignores our unfree allowance.
   marketplace = pkgs.vscode-marketplace or null;
-  # #80: skip claude-code install-check — its prebuilt bun run fails on the aarch64-darwin (Garnix) builder; harmless on linux.
-  claudeCode = pkgs.claude-code.overrideAttrs (_: { doInstallCheck = false; });
+  # #80: on aarch64-darwin, upstream claude-code sets `__noChroot = isDarwin`
+  # (pkgs/by-name/cl/claude-code/package.nix), which Garnix's strict-sandbox
+  # darwin builder (macMini1, sandbox=true) rejects at derivation instantiation
+  # ("has '__noChroot' set, but that's not allowed when 'sandbox' is 'true'").
+  # The __noChroot exemption only exists so the versionCheckHook install-check
+  # can run the bun binary at build time; with doInstallCheck=false the darwin
+  # build reduces to `installBin $src` (src is a fixed-output fetchurl, fetchable
+  # in-sandbox) + wrapProgram — both network-free — so __noChroot is unnecessary.
+  # Drop it too. No-op on linux (both attrs already false there → identical drv).
+  claudeCode = pkgs.claude-code.overrideAttrs (_: {
+    doInstallCheck = false;
+    __noChroot = false;
+  });
 in
 {
   imports = [ ../linux/nix-ld.nix ];
