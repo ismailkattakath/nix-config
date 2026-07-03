@@ -45,9 +45,8 @@ jobs:
   # so renaming/adding legs never requires re-anchoring the ruleset.
   #
   # `checks-system` names the flake system whose `.#checks.<system>` lint set this
-  # leg builds (once per system). Legs without it (nixtel → x86_64-darwin, which is
-  # deliberately NOT in forAllSystems; nixrpi → aarch64-linux checks already built
-  # on the nixarm leg) skip the build step and only evaluate their host config.
+  # leg builds (once per system). The nixrpi leg omits it — its aarch64-linux
+  # checks are already built on the nixarm leg — and only evaluates its host config.
   build:
     name: build (${{ matrix.name }})
     runs-on: ${{ matrix.runs-on }}
@@ -69,11 +68,12 @@ jobs:
             eval-attrs: >-
               .#nixosConfigurations.nixarm.config.system.build.toplevel.drvPath
               .#nixosConfigurations.nixrpi.config.system.build.toplevel.drvPath
-          # nixtel — x86_64-darwin on a NATIVE Intel runner (macos-13), so a future
-          # real build is native. x86_64-darwin isn't in forAllSystems → no
-          # checks.x86_64-darwin to build → eval-only (no `checks-system`).
+          # nixtel — x86_64-darwin on a NATIVE Intel runner (macos-13); builds the
+          # x86_64-darwin lint checks (x86_64-darwin is in forAllSystems) AND
+          # evaluates the nixtel toplevel. A real native build later is a drop-in.
           - name: nixtel
             runs-on: macos-13
+            checks-system: x86_64-darwin
             eval-attrs: .#darwinConfigurations.nixtel.system.drvPath
           # nixcon — aarch64-darwin (Apple Silicon); also builds the aarch64-darwin checks.
           - name: nixcon
@@ -103,8 +103,7 @@ jobs:
         run: git add -A
 
       # Build this leg's SYSTEM lint/format checks and push to Cachix. Skipped on
-      # legs with no `checks-system` (nixtel; and nixrpi, whose aarch64-linux checks
-      # the nixarm leg already builds).
+      # the nixrpi leg (its aarch64-linux checks are already built on the nixarm leg).
       - name: Build lint checks + push to Cachix
         if: matrix.checks-system != ''
         env:

@@ -40,7 +40,7 @@ nix run .#nixarm-vm                       # Boot nixarm in QEMU + HVF on macOS �
 - `.claude/rules/git-purity.md` — always-applied rule: stage `.nix` files before eval.
 - `.claude/hooks/` — `stop-gate.js` (Stop gate: blocks until configs evaluate clean) and `delegate-team.js` (UserPromptSubmit orchestration policy), both wrapped by `superhook.js` (crash-safety + loop-breaking + logging); plus `superhook-digest.js` and `memory-loader.js` (SessionStart context surfacing) and `autostage-nix.js` (PostToolUse git-purity net).
 - `memory/` — **gitignored** project memory (decisions/findings/values/evolution): the candid "why" behind the repo, surfaced each session by `memory-loader.js`. Never `git add`.
-- `.github/workflows/nix-ci.yml` — multi-system Nix CI on GitHub Actions: a native matrix (`ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-15`) that builds every flake output with `nix-fast-build` and pushes to the `ismailkattakath` Cachix cache; this is the multi-system CI where the locally-deferred full flake evaluation/build actually runs. Branch protection requires the aggregate `required-checks` job. (`.github/workflows/` also keeps `build-devcontainer.yml`, `claude*.yml`, and `gitleaks.yml`.)
+- `.github/workflows/nix-ci.yml` — multi-system Nix CI on GitHub Actions: a native per-host matrix (`ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-13`, `macos-latest`) that builds every flake output with `nix-fast-build` and pushes to the `ismailkattakath` Cachix cache; this is the multi-system CI where the locally-deferred full flake evaluation/build actually runs. Branch protection requires the aggregate `required-checks` job. (`.github/workflows/` also keeps `build-devcontainer.yml`, `claude*.yml`, and `gitleaks.yml`.)
 
 ### Orchestration model
 

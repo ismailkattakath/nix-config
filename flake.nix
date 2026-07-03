@@ -71,7 +71,10 @@
         "x86_64-linux"
         "aarch64-linux"
       ];
-      darwinSystems = [ "aarch64-darwin" ];
+      darwinSystems = [
+        "aarch64-darwin"
+        "x86_64-darwin"
+      ];
       allSystems = linuxSystems ++ darwinSystems;
 
       # Generate an attrset keyed by system, e.g. { "x86_64-linux" = f "x86_64-linux"; ... }
