@@ -115,37 +115,44 @@ jobs:
           test -x ./result
 
       # Smoke test the FRESHLY-BUILT image locally — every PR + push, no GHCR
-      # needed. This is the runtime proof static evaluation can't give: that the
-      # baked, DB-registered store yields a WORKING nix and `nix develop`
-      # resolves from that warm store (no from-source rebuild) inside the
-      # container running as the vscode user — exactly the devcontainer scenario.
-      - name: Smoke test (nix works in the baked image)
+      # needed. Proves the MULTI-USER model end to end exactly as the devcontainer
+      # runs it: start the container as root (its entrypoint launches nix-daemon;
+      # the sleep-infinity Cmd keeps it alive), then run the checks as the NON-ROOT
+      # vscode user via `docker exec` — nix reaches the root daemon over the socket
+      # (NIX_REMOTE=daemon) and `nix develop` resolves from the warm baked store.
+      - name: Smoke test (multi-user nix works in the baked image)
         run: |
           ./result | docker load
-          docker run --rm \
+          CID=$(docker run -d \
             -v "$PWD:/workspaces/nix-config" \
             -w /workspaces/nix-config \
-            nix-config-devcontainer:latest \
-            bash -lc '
-              set -e
-              echo "user: $(id -un) ($(id -u):$(id -g))"
-              git config --global --add safe.directory /workspaces/nix-config
-              echo "nix:" && nix --version
-              nix config show | grep -qi ismailkattakath.cachix.org \
-                || { echo "✗ cachix substituter missing from baked nix.conf"; exit 1; }
-              command -v node  >/dev/null && node --version
-              command -v gh    >/dev/null && gh --version | head -1
-              command -v claude >/dev/null && echo "✓ claude on PATH" || { echo "✗ claude missing"; exit 1; }
-              echo "store dir perms (diagnostic):" && ls -ld /nix /nix/store /nix/var/nix
-              echo "=== devShell warm (should resolve from baked store, not build) ==="
-              OUT=$(nix develop .#default --command true 2>&1) || { echo "$OUT"; exit 1; }
-              if echo "$OUT" | grep -Eq "^building .|building of "; then
-                echo "⚠ devShell built from source — warm-store miss:"; echo "$OUT"
-              else
-                echo "✓ devShell resolved without a from-source build"
-              fi
-              echo "=== smoke test passed ==="
-            '
+            nix-config-devcontainer:latest)
+          trap 'docker rm -f "$CID" >/dev/null 2>&1 || true' EXIT
+          # Wait for the daemon socket the root entrypoint creates.
+          for _ in $(seq 1 50); do
+            docker exec "$CID" test -S /nix/var/nix/daemon-socket/socket && break
+            sleep 0.2
+          done
+          docker exec -u 1000:1000 "$CID" bash -lc '
+            set -e
+            echo "user: $(id -un) ($(id -u):$(id -g)); NIX_REMOTE=$NIX_REMOTE"
+            git config --global --add safe.directory /workspaces/nix-config
+            nix --version
+            nix store ping                       # proves the client reaches the root daemon
+            nix config show | grep -qi ismailkattakath.cachix.org \
+              || { echo "✗ cachix substituter missing from baked nix.conf"; exit 1; }
+            command -v node  >/dev/null && node --version
+            command -v gh    >/dev/null && gh --version | head -1
+            command -v claude >/dev/null && echo "✓ claude on PATH" || { echo "✗ claude missing"; exit 1; }
+            echo "=== devShell warm (should resolve from baked store via daemon, not build) ==="
+            OUT=$(nix develop .#default --command true 2>&1) || { echo "$OUT"; exit 1; }
+            if echo "$OUT" | grep -Eq "^building .|building of "; then
+              echo "⚠ devShell built from source — warm-store miss:"; echo "$OUT"
+            else
+              echo "✓ devShell resolved without a from-source build"
+            fi
+            echo "=== smoke test passed ==="
+          '
 
       - name: Login to GHCR
         if: needs.config.outputs.is_publish == 'true'

@@ -1,12 +1,23 @@
 # Nix-FULL devcontainer image for nix-config — the deliberate inverse of a
 # nix-free application image. This repo's devcontainer exists to RUN Nix
 # (`nix flake check`, `darwin-rebuild`, `nixos-rebuild`), so the baked payload
-# IS a working single-user Nix plus the DB-registered devShell closure: inside
-# the container, `nix develop` realizes nothing (no build, no download).
+# IS a working Nix plus the DB-registered devShell closure: inside the
+# container, `nix develop` realizes nothing (no build, no download).
+#
+# STORE ACCESS MODEL — Nix's official MULTI-USER model (not single-user):
+#   `dockerTools.streamLayeredImage` bakes /nix/store IMMUTABLY root-owned (it
+#   reconstructs the store dir from the store-path layers and discards any
+#   chown/chmod of it — verified). A root-owned store is not a bug: it is the
+#   PRECONDITION of Nix multi-user. So the container starts a root `nix-daemon`
+#   (via the entrypoint) and unprivileged `vscode` reaches it over the socket
+#   (`NIX_REMOTE=daemon`) — the daemon performs all privileged store writes.
+#   This is both Nix's documented multi-user model AND the exact non-root path
+#   the first-party devcontainers/features/nix uses. No chown hacks, no sudo.
 #
 # Built by CI (.github/workflows/build-devcontainer.yml), pushed multi-arch to
-# GHCR, and referenced verbatim by .devcontainer/devcontainer.json. Replaces the
-# old four-Features stack (nix / node / claude-code / github-cli) with one image.
+# GHCR, referenced verbatim by .devcontainer/devcontainer.json (remoteUser
+# vscode + overrideCommand:false so the daemon entrypoint runs). Replaces the
+# old four-Features stack (nix / node / claude-code / github-cli).
 #
 #   nix build .#packages.<linux>.devcontainerImage   # ./result = stream script
 #   ./result | docker load                           # local smoke test
@@ -28,6 +39,18 @@ let
   gid = 1000;
   workdir = "/workspaces/nix-config";
 
+  # Multi-user Nix build users: the root daemon drops privileges to these to run
+  # builds. Without them a build fails with "build users group 'nixbld' has no
+  # members". A warm baked closure rarely builds, but ship them so the first real
+  # build works. 32 users mirrors the upstream --daemon install.
+  buildUserIds = lib.range 1 32;
+  nixbldGid = 30000;
+  nixbldPasswdLines = map (
+    i:
+    "nixbld${toString i}:x:${toString (nixbldGid + i)}:${toString nixbldGid}:Nix build user ${toString i}:/var/empty:${pkgs.shadow}/bin/nologin"
+  ) buildUserIds;
+  nixbldMembers = lib.concatMapStringsSep "," (i: "nixbld${toString i}") buildUserIds;
+
   # Pieces the removed devcontainer Features provided, plus base userland. `nix`
   # is the whole point; `nodejs` is required because Claude Code's JS hooks run
   # bare `node` under /bin/sh; `claude-code` is UNFREE (image is built with the
@@ -44,6 +67,7 @@ let
     gawk
     findutils
     which
+    shadow # provides nologin (the nixbld build users' shell)
     cacert # CA bundle for every https client (nix substituters, gh, git)
     gnutar
     gzip
@@ -57,16 +81,29 @@ let
   # download. `registration` below is loaded into the image's Nix DB.
   closure = pkgs.closureInfo { rootPaths = contents; };
 
-  # Real `vscode` user (uid/gid 1000) so runtime identity probes resolve. fakeNss
-  # yields a READ-ONLY /etc/passwd — hence updateRemoteUserUID:false in the JSON.
+  # Real `vscode` user + the nixbld build-user group/members. fakeNss yields a
+  # READ-ONLY /etc/passwd — hence updateRemoteUserUID:false in the JSON.
   nss = pkgs.fakeNss.override {
     extraPasswdLines = [
       "${username}:x:${toString uid}:${toString gid}:${username}:/home/${username}:${pkgs.bashInteractive}/bin/bash"
-    ];
+    ]
+    ++ nixbldPasswdLines;
     extraGroupLines = [
       "${username}:x:${toString gid}:"
+      "nixbld:x:${toString nixbldGid}:${nixbldMembers}"
     ];
   };
+
+  # Container entrypoint: start the root nix-daemon (idempotent) then hand off to
+  # the command. Runs as root (config.User = root); the daemon is a plain
+  # backgrounded process (no systemd) — the standard container pattern, mirroring
+  # devcontainers/features/nix's nix-entrypoint.sh.
+  entrypoint = pkgs.writeShellScript "nix-daemon-entrypoint" ''
+    if [ ! -S /nix/var/nix/daemon-socket/socket ]; then
+      ${pkgs.nix}/bin/nix-daemon > /tmp/nix-daemon.log 2>&1 &
+    fi
+    exec "$@"
+  '';
 in
 dockerTools.streamLayeredImage {
   name = "nix-config-devcontainer";
@@ -83,16 +120,15 @@ dockerTools.streamLayeredImage {
   fakeRootCommands = ''
     set -eu
 
-    # /bin/sh — the devcontainer keepalive runs `/bin/sh -c "while sleep ..."`
-    # and many tools hardcode it.
+    # /bin/sh — many tools (and the entrypoint's exec target) hardcode it.
     mkdir -p bin
     ln -sf ${pkgs.bashInteractive}/bin/bash bin/sh
 
-    # writable HOME for vscode (nix profile, gh config, ~/.claude, npm cache).
+    # writable HOME for vscode (gh config, ~/.claude, npm cache).
     mkdir -p home/${username}
     chown -R ${toString uid}:${toString gid} home/${username}
 
-    # world-writable, sticky /tmp.
+    # world-writable, sticky /tmp (nix-daemon.log lands here; nix build tmp).
     mkdir -p tmp
     chmod 1777 tmp
 
@@ -100,49 +136,58 @@ dockerTools.streamLayeredImage {
     mkdir -p .${workdir}
     chown -R ${toString uid}:${toString gid} workspaces
 
-    # --- make Nix actually work: register the baked closure in the store DB ----
-    # Without --load-db the /nix/store paths are PRESENT but INVALID, so
-    # `nix develop` would try to rebuild/redownload everything. This mirrors
-    # dockerTools.buildImageWithNixDb, done here for a layered image.
+    # --- register the baked closure in the store DB --------------------------
+    # Without --load-db the /nix/store paths are PRESENT but INVALID, so the
+    # daemon would try to rebuild/redownload everything. The daemon (root) reads
+    # this same root-owned db. Mirrors dockerTools.buildImageWithNixDb.
     #
-    # CRITICAL: do NOT bind-mount a volume over /nix in devcontainer.json — it
-    # would shadow this baked store and empty the warm cache. The container's
-    # own overlay makes /nix/store writable for new builds.
+    # /nix/store stays root-owned (immutable in this image type — and correct for
+    # multi-user: only the root daemon writes it). CRITICAL: do NOT bind-mount a
+    # volume over /nix in devcontainer.json — it would shadow this baked warm
+    # store. The container overlay makes the store writable for the root daemon.
     mkdir -p nix/var/nix/db nix/var/nix/profiles nix/var/nix/gcroots nix/var/nix/temproots
     export NIX_STATE_DIR=/nix/var/nix
     export NIX_REMOTE=
     ${pkgs.nix}/bin/nix-store --load-db < ${closure}/registration
 
-    # The container runs as uid ${toString uid} (vscode) but the baked store is
-    # root-owned, so single-user nix can't create /nix/store/.links or new paths
-    # ("Permission denied"). Widen the MUTABLE dir nodes only — baked store PATHS
-    # stay root-owned/read-only, so the layer stays small. Use chmod 1777 on the
-    # store dir (world-writable + sticky) so it works regardless of how the layer
-    # records dir OWNERSHIP; chown /nix/var (db/profiles/gcroots — small).
-    chown ${toString uid}:${toString gid} nix nix/store || true
-    chmod 1777 nix/store
-    chown -R ${toString uid}:${toString gid} nix/var
-
-    # --- baked nix.conf: flakes on + the public Cachix substituter (read only) -
-    # Key is a verification key (also in modules/shared/nix-cache.nix); read is
-    # public, so NO auth token on the consumer.
+    # --- baked nix.conf: multi-user daemon + flakes + public Cachix (read) ----
+    # sandbox=false: the build sandbox doesn't work nested in a container.
+    # build-users-group=nixbld: the daemon drops to the baked build users.
+    # trusted-users: let vscode add substituters / import paths interactively.
+    # Cachix key is a verification key (also in modules/shared/nix-cache.nix).
     mkdir -p etc/nix
     cat > etc/nix/nix.conf <<'NIXCONF'
     experimental-features = nix-command flakes
+    build-users-group = nixbld
+    sandbox = false
+    trusted-users = root vscode
     extra-substituters = https://ismailkattakath.cachix.org
     extra-trusted-public-keys = ismailkattakath.cachix.org-1:7BbEvLpASY7aNUZfpzRMWir1zjU3nqmllBTl8p7gr2I=
     NIXCONF
   '';
 
   config = {
-    User = "${toString uid}:${toString gid}";
+    # Container/entrypoint runs as ROOT so the nix-daemon starts privileged.
+    # VS Code drops to the non-root `vscode` remoteUser for terminals/processes,
+    # which reach the daemon over the socket (NIX_REMOTE=daemon below).
+    User = "0:0";
     WorkingDir = workdir;
+
+    # Entrypoint starts the daemon, then execs Cmd. Requires overrideCommand:false
+    # in devcontainer.json so VS Code respects this entrypoint; Cmd = a keepalive
+    # so the container stays up for `docker exec` sessions.
+    Entrypoint = [ "${entrypoint}" ];
+    Cmd = [
+      "${pkgs.coreutils}/bin/sleep"
+      "infinity"
+    ];
+
     Env = [
       "PATH=${lib.makeBinPath contents}:/usr/local/bin:/usr/bin:/bin"
       "HOME=/home/${username}"
       "USER=${username}"
-      # Single-user nix (no daemon inside the container).
-      "NIX_REMOTE="
+      # Multi-user: clients talk to the root daemon over the socket.
+      "NIX_REMOTE=daemon"
       "NIXPKGS_ALLOW_UNFREE=1"
       # TLS trust for every https client baked in.
       "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
@@ -150,7 +195,5 @@ dockerTools.streamLayeredImage {
       "LANG=C.UTF-8"
       "DEVCONTAINER=true"
     ];
-    # No blocking Cmd/Entrypoint — the VS Code dev container runtime injects its
-    # own keepalive and execs the server. A blocking CMD would fight that.
   };
 }
