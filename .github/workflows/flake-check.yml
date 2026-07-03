@@ -19,6 +19,15 @@ name: flake-check
 # Invoked via `nix run nixpkgs#nix-fast-build --` (pinned through the flake's
 # nixpkgs), mirroring the repo's `nix run nixpkgs#skopeo` idiom.
 #
+# PARALLELISM/MEMORY TUNING (nix-fast-build defaults to core-count eval-workers
+# + unbounded build jobs, which OOMs — worst under QEMU on the emulated
+# aarch64-linux leg): every invocation caps `--eval-workers`/`-j` and sets a
+# `--eval-max-memory-size 3072` per-worker ceiling. Native legs use 2/2; the
+# emulated leg serializes to 1/1 with `--option cores 2`. All invocations pass
+# `--option eval-cache false` — the shared ~/.cache/nix/eval-cache-v6/*.sqlite
+# buys nothing on ephemeral runners and its concurrent access emits benign
+# `... is busy` noise.
+#
 # ---------------------------------------------------------------------------
 # REQUIRED-CHECK DESIGN — read before touching job names or branch protection.
 # ---------------------------------------------------------------------------
@@ -118,6 +127,10 @@ jobs:
       #   darwinConfigurations.nixcon…toplevel           -> nix build (deep config path)
       # nix-fast-build builds nixbox-vm too, so its writeShellApplication
       # shellcheck runs at build time exactly as before.
+      # Native leg: cap eval-workers + build jobs to 2 (avoids the unbounded
+      # core-count parallelism that OOMs) and disable Nix's shared eval-cache
+      # SQLite (buys nothing on ephemeral CI, and its concurrent access emits
+      # the benign `... eval-cache-v6/*.sqlite is busy` noise).
       - name: Evaluate + build aarch64-darwin (nix-fast-build --skip-cached)
         if: matrix.name == 'aarch64-darwin'
         run: |
@@ -128,7 +141,10 @@ jobs:
             echo "::group::nix-fast-build $attr"
             nix run nixpkgs#nix-fast-build -- \
               --skip-cached --no-nom \
-              --flake "$attr" --systems aarch64-darwin
+              --flake "$attr" --systems aarch64-darwin \
+              --eval-workers 2 -j 2 \
+              --eval-max-memory-size 3072 \
+              --option eval-cache false
             echo "::endgroup::"
           done
       - name: Build darwin toplevel (deep config path)
@@ -141,6 +157,7 @@ jobs:
       #   packages.x86_64-linux.{dockerImage,devcontainerImage} -> nix-fast-build .#packages.x86_64-linux
       #   checks.x86_64-linux.{formatting,pre-commit}           -> nix-fast-build .#checks.x86_64-linux
       #   devShells.x86_64-linux.default                        -> nix-fast-build .#devShells.x86_64-linux
+      # Native leg: same parallelism/eval-cache caps as the darwin leg.
       - name: Evaluate + build x86_64-linux (nix-fast-build --skip-cached)
         if: matrix.name == 'x86_64-linux'
         run: |
@@ -151,7 +168,10 @@ jobs:
             echo "::group::nix-fast-build $attr"
             nix run nixpkgs#nix-fast-build -- \
               --skip-cached --no-nom \
-              --flake "$attr" --systems x86_64-linux
+              --flake "$attr" --systems x86_64-linux \
+              --eval-workers 2 -j 2 \
+              --eval-max-memory-size 3072 \
+              --option eval-cache false
             echo "::endgroup::"
           done
 
@@ -160,6 +180,10 @@ jobs:
       #   checks.aarch64-linux.{formatting,pre-commit}           -> nix-fast-build .#checks.aarch64-linux
       #   devShells.aarch64-linux.default                        -> nix-fast-build .#devShells.aarch64-linux
       #   nixosConfigurations.{nixbox,nixrpi}…toplevel           -> nix build (deep config paths)
+      # EMULATED leg (tightest caps): QEMU multiplies per-process RSS, so serialize
+      # to a single eval worker + single build job and cap Nix build cores to 2
+      # (`--option cores 2`; nix-fast-build has no native --cores). This is the leg
+      # that OOM'd (`Cannot allocate memory`) under default core-count parallelism.
       - name: Evaluate + build aarch64-linux (nix-fast-build --skip-cached)
         if: matrix.name == 'aarch64-linux'
         run: |
@@ -170,7 +194,11 @@ jobs:
             echo "::group::nix-fast-build $attr"
             nix run nixpkgs#nix-fast-build -- \
               --skip-cached --no-nom \
-              --flake "$attr" --systems aarch64-linux
+              --flake "$attr" --systems aarch64-linux \
+              --eval-workers 1 -j 1 \
+              --option cores 2 \
+              --eval-max-memory-size 3072 \
+              --option eval-cache false
             echo "::endgroup::"
           done
       - name: Build aarch64-linux toplevels (deep config paths)
@@ -201,11 +229,15 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
       # Covers checks.x86_64-linux.{formatting,pre-commit} (1:1 with the old two
       # `nix build …formatting` / `…pre-commit` steps).
+      # Native x86_64: same parallelism/eval-cache caps as the matrix native legs.
       - name: Lint gate (nix-fast-build .#checks.x86_64-linux --skip-cached)
         run: |
           nix run nixpkgs#nix-fast-build -- \
             --skip-cached --no-nom \
-            --flake .#checks.x86_64-linux --systems x86_64-linux
+            --flake .#checks.x86_64-linux --systems x86_64-linux \
+            --eval-workers 2 -j 2 \
+            --eval-max-memory-size 3072 \
+            --option eval-cache false
 
   # Aggregate required check. This single always-run job is the branch-protection
   # anchor: it reports one stable status (`flake-check-result`) regardless of how
