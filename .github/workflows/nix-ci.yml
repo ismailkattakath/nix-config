@@ -1,6 +1,6 @@
 name: nix-ci
 
-# Self-owned, native multi-system Nix CI — the replacement for hosted Garnix.
+# Self-owned, native multi-system Nix CI (replaced the former hosted Garnix).
 #
 # LEAN MERGE CI: this workflow does NOT build the host system toplevels
 # (nixcon / nixtel / nixarm / nixamd / nixrpi). Building them — especially the cold

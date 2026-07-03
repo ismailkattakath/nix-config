@@ -10,7 +10,7 @@
     nix-darwin.url = "github:LnL7/nix-darwin";
     nix-darwin.inputs.nixpkgs.follows = "nixpkgs";
 
-    # User layer, shared by every host. Also pinned to the parent nixpkgs.
+    # User layer, shared by every host.
     home-manager.url = "github:nix-community/home-manager";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
 
@@ -65,8 +65,8 @@
       username = "izzy";
 
       # ---- DRY system mapping -------------------------------------------------
-      # The canonical set of architectures this repo targets. Every package /
-      # devShell output is generated for all of them via forAllSystems.
+      # The four architectures this repo targets. Every package / devShell
+      # output is generated for all of them via forAllSystems.
       linuxSystems = [
         "x86_64-linux"
         "aarch64-linux"
@@ -77,15 +77,14 @@
       ];
       allSystems = linuxSystems ++ darwinSystems;
 
-      # Generate an attrset keyed by system, e.g. { "x86_64-linux" = f "x86_64-linux"; ... }
       forAllSystems = f: nixpkgs.lib.genAttrs allSystems f;
 
       # Per-system nixpkgs accessor (legacyPackages avoids a redundant eval).
       pkgsFor = system: nixpkgs.legacyPackages.${system};
 
       # Unfree-permitting nixpkgs, ONLY for the devcontainer image (claude-code is
-      # unfree). legacyPackages has unfree disabled, so the image derivation needs
-      # its own instance. Deliberately scoped here — no other output imports it.
+      # unfree). legacyPackages has unfree disabled, so the image needs its own
+      # instance. Deliberately scoped here — no other output imports it.
       pkgsUnfreeFor =
         system:
         import nixpkgs {
@@ -94,15 +93,15 @@
         };
 
       # ---- Formatting / lint (treefmt-nix) ------------------------------------
-      # Evaluate ./treefmt.nix per system. The wrapper backs `nix fmt`; the
-      # `.config.build.check` derivation backs the CI formatting gate.
+      # The wrapper backs `nix fmt`; the `.config.build.check` derivation backs
+      # the CI formatting gate.
       treefmtEval = forAllSystems (system: treefmt-nix.lib.evalModule (pkgsFor system) ./treefmt.nix);
 
       # ---- Shared dev toolchain -----------------------------------------------
-      # Single source of truth for the pinned dev tools, consumed by BOTH the
-      # `nix develop` devShell AND the prebuilt devcontainer image — so the two
-      # can never drift. (preCommit.enabledPackages is added on the devShell side
-      # only; the image bakes the treefmt wrapper directly.)
+      # Pinned dev tools consumed by BOTH the `nix develop` devShell AND the
+      # prebuilt devcontainer image, so the two can never drift.
+      # (preCommit.enabledPackages is added on the devShell side only; the image
+      # bakes the treefmt wrapper directly.)
       devPackagesFor =
         system:
         let
@@ -132,8 +131,8 @@
         };
 
       # ---- NixOS system builder ---------------------------------------------------
-      # Produces a full NixOS system with Home Manager embedded. Home Manager user
-      # config is the same shared profile used by standalone and darwin hosts.
+      # Full NixOS system with Home Manager embedded, using the same shared user
+      # profile as the darwin hosts.
       mkNixos =
         {
           system,
@@ -249,9 +248,8 @@
       # `nix build .#packages.<system>.dockerImage`        → minimal runtime tarball
       # `nix build .#packages.<linux>.devcontainerImage`   → devcontainer stream script (Linux only)
       # `nix build .#nixarm-image`                         → UTM-importable qcow2 → ./result/
-      # Merge the per-system base with the system-specific extras in one fold —
-      # flatter than nesting recursiveUpdate calls, and the merge order reads
-      # top-to-bottom: base (all systems) → devcontainer (linux) → single-system.
+      # One fold merges base (all systems) → devcontainer (linux) → single-system,
+      # flatter than nesting recursiveUpdate calls.
       packages = nixpkgs.lib.foldl' nixpkgs.lib.recursiveUpdate { } [
         # Base: minimal runtime container image, per system.
         (forAllSystems (system: {
@@ -292,10 +290,9 @@
 
       # ---- Multi-architecture dev shell --------------------------------------
       # `nix develop` on any target. Used as the default Devcontainer profile.
-      # The shellHook installs the git pre-commit hook automatically. nixd is the
-      # eval-aware LSP for editor completion. statix/deadnix/jq are exposed as
-      # standalone binaries (NOT via preCommit.enabledPackages, which only yields
-      # the treefmt wrapper) so the .vscode lint tasks can call them directly.
+      # statix/deadnix/jq are exposed as standalone binaries (NOT via
+      # preCommit.enabledPackages, which only yields the treefmt wrapper) so the
+      # .vscode lint tasks can call them directly.
       devShells = forAllSystems (
         system:
         let
@@ -331,13 +328,10 @@
       formatter = forAllSystems (system: treefmtEval.${system}.config.build.wrapper);
 
       # ---- Checks: `nix flake check` enforces formatting + lint + hooks ------
-      # `formatting` fails on any unformatted/lintable file; `pre-commit` runs
-      # the configured hooks in the sandbox so CI mirrors local commits.
-      # Lint/format only — kept lean so merge CI is fast. The host toplevels are
-      # deliberately NOT checks: BUILDING them (esp. the cold linux-rpi kernel,
-      # ~1h) is a RELEASE-time concern, done later against `nixosConfigurations.*`
-      # / `darwinConfigurations.*` directly. Merge CI instead EVALUATES those
-      # configs (cheap, catches config/eval errors) without building — see
+      # Lint/format only, to keep merge CI fast. The host toplevels are
+      # deliberately NOT checks: BUILDING them (esp. the cold rpi kernel, ~1h) is
+      # a RELEASE-time concern. Merge CI instead EVALUATES the host configs
+      # (cheap, catches config/eval errors) without building — see
       # .github/workflows/nix-ci.yml.
       checks = forAllSystems (system: {
         formatting = treefmtEval.${system}.config.build.check self;
