@@ -287,7 +287,7 @@ jobs:
       # for this runner's arch — not a Nix-store binary (which uses its own
       # store loader + RUNPATH and would pass even if the standard loader
       # regressed). If the arch-gated /lib*/ld-linux-*.so.* symlink or the
-      # libstdc++ ldconfig cache regresses, this step fails CI.
+      # libstdc++ LD_LIBRARY_PATH resolution regresses, this step fails CI.
       - name: Guard — foreign glibc binary (VS Code Server node) executes
         run: |
           set -euo pipefail

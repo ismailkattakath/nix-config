@@ -92,9 +92,9 @@ let
       throw "devcontainer-image: unsupported host platform ${hostPlat.system} — add its glibc loader name/dir";
 
   # gcc runtime libs (libstdc++.so.6, libgcc_s.so.1) the VS Code Server node needs
-  # once the loader resolves. Made discoverable by symlinking them into the
-  # loader's standard trusted dir (below) rather than a global LD_LIBRARY_PATH,
-  # which can perturb the Nix binaries.
+  # once the loader resolves. Put on LD_LIBRARY_PATH in config.Env (below) — the
+  # only mechanism the store-isolated nixpkgs loader honors; scoped to this one
+  # narrow dir so it doesn't perturb the co-installed Nix binaries.
   gccLib = pkgs.stdenv.cc.cc.lib;
 
   # Everything that must be a VALID store path so `nix develop` skips build +
@@ -222,23 +222,21 @@ dockerTools.streamLayeredImage {
       ''
     }
 
-    # Resolve libstdc++.so.6 / libgcc_s.so.1 (which the server node links) by
-    # SYMLINKING them into the standard default trusted lib dir next to the
-    # loader — NOT via an ldconfig cache and NOT via a global LD_LIBRARY_PATH.
-    #   * ld.so.cache is a dead end here: nixpkgs patches glibc so the loader
-    #     reads its cache from <glibc-store-path>/etc/ld.so.cache (LD_SO_CACHE =
-    #     PREFIX "/etc/ld.so.cache"), NOT /etc/ld.so.cache — and nixpkgs deletes
-    #     that file — so a cache we build at /etc/ld.so.cache is never consulted
-    #     (this is exactly why the first attempt failed with
-    #     "libstdc++.so.6: cannot open shared object file").
-    #   * A global LD_LIBRARY_PATH would leak into and perturb the Nix binaries.
-    # The nixpkgs glibc patch does NOT touch glibc's built-in default trusted
-    # search dirs (/lib, /usr/lib, and the arch /lib64), so a foreign binary's
-    # loader finds libs placed there. The Nix binaries are unaffected — they use
-    # their own store loader + DT_RUNPATH and never consult these dirs.
-    for solib in ${gccLib}/lib/libstdc++.so.6* ${gccLib}/lib/libgcc_s.so.1*; do
-      [ -e "$solib" ] && ln -sf "$solib" ${loaderInfo.libDir}/"$(basename "$solib")"
-    done
+    # NOTE: libstdc++.so.6 / libgcc_s.so.1 resolution for the foreign binary is
+    # handled by LD_LIBRARY_PATH in config.Env (see the Env block below), NOT
+    # here. Two other mechanisms were tried and PROVEN not to work with the
+    # nixpkgs-patched loader:
+    #   * an /etc/ld.so.cache built by ldconfig — nixpkgs' dont-use-system-ld-
+    #     so-cache.patch repoints the loader's cache to
+    #     <glibc-store-path>/etc/ld.so.cache and deletes it, so /etc/ld.so.cache
+    #     is never consulted;
+    #   * symlinking the libs into /lib,/lib64 — the nixpkgs glibc loader's
+    #     built-in default search dirs (SYSTEM_DIRS) are the glibc STORE path
+    #     (glibc is configured with prefix=$out), NOT the FHS /lib,/lib64, so a
+    #     foreign binary's loader never looks there.
+    # Both surfaced as "libstdc++.so.6: cannot open shared object file" once the
+    # loader itself resolved. LD_LIBRARY_PATH is the mechanism the store-isolated
+    # loader honors.
 
     # --- minimal /etc/os-release --------------------------------------------
     # Silences the devcontainer runtime's distro probe
@@ -284,6 +282,20 @@ dockerTools.streamLayeredImage {
       "GIT_SSL_CAINFO=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
       "LANG=C.UTF-8"
       "DEVCONTAINER=true"
+      # Make libstdc++.so.6 / libgcc_s.so.1 resolvable to FOREIGN (non-Nix)
+      # glibc binaries — the VS Code Server's bundled generic `node` links them
+      # and, once our standard-loader symlink lets it exec, dies with
+      # "libstdc++.so.6: cannot open shared object file" otherwise. This is the
+      # ONLY mechanism the nixpkgs-patched loader honors: its default search
+      # dirs are the glibc STORE path (not /lib,/lib64) and it never reads
+      # /etc/ld.so.cache (see the fakeRootCommands note). Scoped to the single
+      # narrow gcc-lib dir — NOT a broad profile — so the shadow surface is just
+      # libstdc++/libgcc_s. Safe for the co-installed Nix binaries: those two
+      # sonames are the SAME gcc's ABI-identical store libs (shadowing is a
+      # no-op), and every OTHER RUNPATH lib they need (openssl, icu, …) has a
+      # distinct soname absent from this dir, so the loader falls through to
+      # their DT_RUNPATH untouched.
+      "LD_LIBRARY_PATH=${lib.makeLibraryPath [ gccLib ]}"
     ];
   };
 }
