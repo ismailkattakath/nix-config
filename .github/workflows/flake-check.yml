@@ -107,6 +107,7 @@ jobs:
         run: |
           for t in \
             .#packages.x86_64-linux.dockerImage \
+            .#packages.x86_64-linux.devcontainerImage \
             .#checks.x86_64-linux.formatting \
             .#checks.x86_64-linux.pre-commit \
             .#devShells.x86_64-linux.default; do
@@ -126,6 +127,7 @@ jobs:
             .#nixosConfigurations.nixbox.config.system.build.toplevel \
             .#nixosConfigurations.nixrpi.config.system.build.toplevel \
             .#packages.aarch64-linux.dockerImage \
+            .#packages.aarch64-linux.devcontainerImage \
             .#checks.aarch64-linux.formatting \
             .#checks.aarch64-linux.pre-commit \
             .#devShells.aarch64-linux.default; do
