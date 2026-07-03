@@ -16,13 +16,18 @@
 #   Setting them from Home Manager is the portable, standalone-correct way to
 #   get the same effect without root or a NixOS system rebuild.
 #
-#   `hmStandalone` selects that path: it defaults to false (optional arg, so the
-#   NixOS/darwin home.nix imports that don't pass it stay valid), and no in-tree
-#   host sets it true yet — a future non-NixOS standalone-HM host would.
+#   `hmStandalone` selects that path. It is a declared module option (NOT a
+#   function-arg default): the module system resolves named function arguments
+#   from `_module.args` and does not honor a `? false` fallback for a path-
+#   imported module, so a plain arg default throws "attribute 'hmStandalone'
+#   missing" on every consumer. Declaring it as an option with `default = false`
+#   keeps every current import (NixOS + darwin) valid and inert; a future
+#   non-NixOS standalone-HM host opts in with `hmStandalone = true;` (none
+#   in-tree today).
 {
   pkgs,
   lib,
-  hmStandalone ? false,
+  config,
   ...
 }:
 
@@ -39,9 +44,20 @@ let
   ];
 in
 {
+  options.hmStandalone = lib.mkOption {
+    type = lib.types.bool;
+    default = false;
+    description = ''
+      Enable the Home-Manager nix-ld shim. Set true only on a standalone
+      Home-Manager host on non-NixOS Linux, where `programs.nix-ld` does not
+      exist. On NixOS the native `programs.nix-ld` module owns nix-ld, so this
+      stays false and the shim is inert.
+    '';
+  };
+
   # Fires only for standalone Home Manager on non-NixOS Linux; inert on NixOS
   # hosts (native module owns nix-ld there) and on darwin.
-  config = lib.mkIf (pkgs.stdenv.hostPlatform.isLinux && hmStandalone) {
+  config = lib.mkIf (pkgs.stdenv.hostPlatform.isLinux && config.hmStandalone) {
     home.sessionVariables = {
       # The glibc dynamic loader the patched binaries should invoke.
       NIX_LD = "${pkgs.stdenv.cc.bintools.dynamicLinker}";
