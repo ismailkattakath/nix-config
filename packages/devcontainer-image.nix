@@ -92,8 +92,9 @@ let
       throw "devcontainer-image: unsupported host platform ${hostPlat.system} — add its glibc loader name/dir";
 
   # gcc runtime libs (libstdc++.so.6, libgcc_s.so.1) the VS Code Server node needs
-  # once the loader resolves. Made discoverable via an ldconfig cache (below)
-  # rather than a global LD_LIBRARY_PATH, which can perturb the Nix binaries.
+  # once the loader resolves. Made discoverable by symlinking them into the
+  # loader's standard trusted dir (below) rather than a global LD_LIBRARY_PATH,
+  # which can perturb the Nix binaries.
   gccLib = pkgs.stdenv.cc.cc.lib;
 
   # Everything that must be a VALID store path so `nix develop` skips build +
@@ -221,18 +222,23 @@ dockerTools.streamLayeredImage {
       ''
     }
 
-    # Resolve libstdc++.so.6 / libgcc_s.so.1 (needed by the server node once the
-    # loader runs) via an ldconfig CACHE — NOT a global LD_LIBRARY_PATH, which
-    # would leak into the Nix binaries' environment and can break them. The Nix
-    # binaries keep using their own store loader + RUNPATH and are unaffected by
-    # this default-search-path cache. glibc's own lib dir is included so the
-    # loader's companion libs (libc.so.6 …) resolve for foreign binaries too.
-    mkdir -p etc
-    cat > etc/ld.so.conf <<LDCONF
-    ${gccLib}/lib
-    ${pkgs.glibc}/lib
-    LDCONF
-    ${pkgs.glibc.bin}/bin/ldconfig -f etc/ld.so.conf -C etc/ld.so.cache
+    # Resolve libstdc++.so.6 / libgcc_s.so.1 (which the server node links) by
+    # SYMLINKING them into the standard default trusted lib dir next to the
+    # loader — NOT via an ldconfig cache and NOT via a global LD_LIBRARY_PATH.
+    #   * ld.so.cache is a dead end here: nixpkgs patches glibc so the loader
+    #     reads its cache from <glibc-store-path>/etc/ld.so.cache (LD_SO_CACHE =
+    #     PREFIX "/etc/ld.so.cache"), NOT /etc/ld.so.cache — and nixpkgs deletes
+    #     that file — so a cache we build at /etc/ld.so.cache is never consulted
+    #     (this is exactly why the first attempt failed with
+    #     "libstdc++.so.6: cannot open shared object file").
+    #   * A global LD_LIBRARY_PATH would leak into and perturb the Nix binaries.
+    # The nixpkgs glibc patch does NOT touch glibc's built-in default trusted
+    # search dirs (/lib, /usr/lib, and the arch /lib64), so a foreign binary's
+    # loader finds libs placed there. The Nix binaries are unaffected — they use
+    # their own store loader + DT_RUNPATH and never consult these dirs.
+    for solib in ${gccLib}/lib/libstdc++.so.6* ${gccLib}/lib/libgcc_s.so.1*; do
+      [ -e "$solib" ] && ln -sf "$solib" ${loaderInfo.libDir}/"$(basename "$solib")"
+    done
 
     # --- minimal /etc/os-release --------------------------------------------
     # Silences the devcontainer runtime's distro probe
