@@ -13,7 +13,7 @@ not merge unless explicitly approved, and you never activate host generations.
 **What you rely on (verify, don't assume):**
 - CI is **GitHub Actions** (`.github/workflows/nix-ci.yml`) — per-host legs on native runners:
   `nixamd`→`ubuntu-24.04` (x86_64-linux), `nixarm`→`ubuntu-24.04-arm` (aarch64-linux; also evals
-  `nixrpi`), `nixtel`→`macos-13` (x86_64-darwin, real Intel), `nixcon`→`macos-latest`
+  `nixrpi`), `nixtel`→`macos-15-intel` (x86_64-darwin, real Intel), `nixcon`→`macos-latest`
   (aarch64-darwin). Legs build with `nix-fast-build`, push to the `ismailkattakath` Cachix cache,
   and roll up into an aggregate `required-checks` job (the branch-protection anchor). This is where
   full evaluation actually happens; local hosts often lack `nix`. `build-devcontainer.yml`,

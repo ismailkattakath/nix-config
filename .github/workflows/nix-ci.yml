@@ -16,7 +16,7 @@ name: nix-ci
 # repos, no QEMU) — so reintroducing a real toplevel BUILD later is a native build:
 #   nixamd (x86_64-linux)   -> ubuntu-24.04
 #   nixarm (aarch64-linux)  -> ubuntu-24.04-arm    (also evaluates nixrpi — same system/runner)
-#   nixtel (x86_64-darwin)  -> macos-13            (Intel)
+#   nixtel (x86_64-darwin)  -> macos-15-intel      (Intel)
 #   nixcon (aarch64-darwin) -> macos-latest        (Apple Silicon / arm64)
 #
 # READ from the ismailkattakath Cachix cache is public (substituter + key below).
@@ -68,11 +68,12 @@ jobs:
             eval-attrs: >-
               .#nixosConfigurations.nixarm.config.system.build.toplevel.drvPath
               .#nixosConfigurations.nixrpi.config.system.build.toplevel.drvPath
-          # nixtel — x86_64-darwin on a NATIVE Intel runner (macos-13); builds the
-          # x86_64-darwin lint checks (x86_64-darwin is in forAllSystems) AND
-          # evaluates the nixtel toplevel. A real native build later is a drop-in.
+          # nixtel — x86_64-darwin on a NATIVE Intel runner (macos-15-intel — the
+          # last Intel image; macos-13 was retired 2025-12-04, and x86_64 macOS
+          # ends when macos-15 sunsets ~2027). Builds the x86_64-darwin lint checks
+          # (x86_64-darwin is in forAllSystems) AND evaluates the nixtel toplevel.
           - name: nixtel
-            runs-on: macos-13
+            runs-on: macos-15-intel
             checks-system: x86_64-darwin
             eval-attrs: .#darwinConfigurations.nixtel.system.drvPath
           # nixcon — aarch64-darwin (Apple Silicon); also builds the aarch64-darwin checks.
