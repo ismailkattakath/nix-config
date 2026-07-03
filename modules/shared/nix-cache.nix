@@ -8,12 +8,20 @@
 # NO auth token on any consumer. The CACHIX_AUTH_TOKEN is a write-only
 # credential and lives solely as a GitHub Actions secret (CI push), never in
 # Nix or git. See .github/workflows/flake-check.yml.
+#
+# cache.garnix.io is Garnix's public CI cache (see garnix.yaml): once Garnix
+# builds the flake outputs, every host substitutes those paths (host toplevels,
+# devShells, images) from it instead of rebuilding. Also public-read, no token.
 {
   nix.settings = {
     # Appended to (not replacing) the default cache.nixos.org substituter.
-    extra-substituters = [ "https://ismailkattakath.cachix.org" ];
+    extra-substituters = [
+      "https://ismailkattakath.cachix.org"
+      "https://cache.garnix.io"
+    ];
     extra-trusted-public-keys = [
       "ismailkattakath.cachix.org-1:7BbEvLpASY7aNUZfpzRMWir1zjU3nqmllBTl8p7gr2I="
+      "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g="
     ];
   };
 }
