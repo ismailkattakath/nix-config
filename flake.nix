@@ -36,6 +36,14 @@
     # Linux hosts never reference it (and never receive it as a specialArg).
     nix-vscode-extensions.url = "github:nix-community/nix-vscode-extensions";
     nix-vscode-extensions.inputs.nixpkgs.follows = "nixpkgs";
+
+    # Declaratively INSTALLS Homebrew itself at the arch-correct prefix
+    # (/opt/homebrew on Apple Silicon `nixcon`, /usr/local on Intel `nixtel`) —
+    # the prefix is auto-selected from the host's stdenv platform. Runs UNDER
+    # nix-darwin's built-in `homebrew.*` module, which still owns brews/casks
+    # (see modules/darwin/homebrew.nix). No `nixpkgs` input to follow — the
+    # module uses the consumer's pkgs.
+    nix-homebrew.url = "github:zhaofengli/nix-homebrew";
   };
 
   outputs =
@@ -49,6 +57,7 @@
       agenix,
       raspberry-pi-nix,
       nix-vscode-extensions,
+      nix-homebrew,
       ...
     }:
     let
@@ -178,6 +187,7 @@
           };
           modules = [
             { nixpkgs.hostPlatform = system; }
+            nix-homebrew.darwinModules.nix-homebrew # declaratively install brew (arch-correct prefix)
             ./hosts/${hostname}.nix
             ./modules/shared/nix-cache.nix # Cachix binary cache (read)
           ]
@@ -194,9 +204,9 @@
           hostname = "nixcon";
         };
 
-        # Intel Mac (x86_64-darwin) — CONFIG-ONLY / CI-eval today (not activated
-        # on a real machine yet). Homebrew's prefix differs on Intel (/usr/local
-        # vs /opt/homebrew) — an activation detail, not an eval concern.
+        # Intel Mac (x86_64-darwin) — a real 2017 MacBook Air. Homebrew installs
+        # to /usr/local automatically (nix-homebrew keys the prefix off the host
+        # platform); Touch ID is gated off in modules/darwin/core.nix (no sensor).
         "nixtel" = mkDarwin {
           system = "x86_64-darwin";
           hostname = "nixtel";

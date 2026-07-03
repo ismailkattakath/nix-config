@@ -1,14 +1,11 @@
-# Bridge file for the "nixtel" host — an x86_64-darwin (Intel) Mac.
+# Bridge file for the "nixtel" host — a real 2017 MacBook Air (x86_64-darwin, Intel).
 #
-# CONFIG-ONLY / CI-eval today: nixtel is not activated on a real machine yet, so
-# it only needs to EVALUATE on the x86_64-darwin path. It mirrors hosts/nixcon.nix
-# (the same shared darwin core + Home Manager profile); the host's platform is set
-# by the mkDarwin helper in flake.nix from the `system` arg, so nothing here is
-# arch-hardcoded.
-#
-# For a REAL Intel Mac later: Homebrew's prefix is /usr/local (Apple Silicon uses
-# /opt/homebrew) — a nix-darwin activation detail, not an eval concern; and add
-# any Intel-specific hardware/state as needed.
+# Mirrors hosts/nixcon.nix (the same shared darwin core + Home Manager profile).
+# The host platform is set by the mkDarwin helper in flake.nix from the `system`
+# arg, so nothing here is arch-hardcoded. Homebrew installs to /usr/local
+# automatically (nix-homebrew keys the prefix off the host platform), and Touch ID
+# is gated off in modules/darwin/core.nix (this machine has no sensor).
+# Activate on the machine with: darwin-rebuild switch --flake .#nixtel
 {
   home-manager,
   username,

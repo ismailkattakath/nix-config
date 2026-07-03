@@ -1,11 +1,18 @@
 # nix-darwin system module — macOS-specific system preferences.
 # This is "system logic" for the Mac; user logic stays in modules/shared.
-{ pkgs, username, ... }:
+{
+  pkgs,
+  lib,
+  username,
+  ...
+}:
 
 {
   imports = [
     # Declarative Homebrew (taps/brews/casks) for the Mac.
     ./homebrew.nix
+    # Install Homebrew itself at the arch-correct prefix (nix-homebrew).
+    ./nix-homebrew.nix
     # Hourly LaunchAgent that rotates ~/Pictures/Screengrab (>24h → ~/.Trash).
     ./screengrab-rotate.nix
   ];
@@ -61,6 +68,7 @@
   # services.yabai.enable = true;
   # services.skhd.enable = true;
 
-  # Use Touch ID for sudo (quality-of-life on Apple Silicon laptops).
-  security.pam.services.sudo_local.touchIdAuth = true;
+  # Touch ID for sudo — Apple-Silicon laptops only. The 2017 Intel MacBook Air
+  # (`nixtel`) has no Touch ID sensor, so gate this off there.
+  security.pam.services.sudo_local.touchIdAuth = lib.mkIf pkgs.stdenv.hostPlatform.isAarch64 true;
 }
