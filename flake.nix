@@ -287,19 +287,34 @@
           inherit system;
           specialArgs = {
             inherit
-              home-manager
               userName
               domainName
               fullName
               handleName
-              nix-vscode-extensions
               ;
           };
           modules = [
-            { nixpkgs.hostPlatform = system; }
+            {
+              nixpkgs.hostPlatform = system;
+              nixpkgs.overlays = [ nix-vscode-extensions.overlays.default ];
+            }
             nix-homebrew.darwinModules.nix-homebrew # declaratively install brew (arch-correct prefix)
             ./hosts/${hostname}.nix
             ./modules/shared/nix-cache.nix # Cachix binary cache (read)
+            home-manager.darwinModules.home-manager
+            {
+              home-manager = {
+                useGlobalPkgs = true;
+                useUserPackages = true;
+                extraSpecialArgs = {
+                  inherit userName domainName fullName handleName;
+                };
+                users.${userName} = {
+                  imports = [ ./modules/shared/home.nix ];
+                  home.stateVersion = "24.05";
+                };
+              };
+            }
           ]
           ++ extraModules;
         };
