@@ -405,26 +405,29 @@
       # nixvm entry and the forAllSystems cf-ssh apps coexist under one `apps`
       # attribute (a bare `apps.x.y = …` alongside `apps = …` is a
       # duplicate-definition error).
-      apps = nixpkgs.lib.recursiveUpdate {
-        aarch64-linux.nixvm = {
-          type = "app";
-          program = "${self.packages.aarch64-linux.nixvm}/bin/nixvm";
-          meta.description = "Bootstrap NixOS nixvm on aarch64-linux from the live ISO via disko-install";
-        };
-      } (
-        forAllSystems (system: {
-          cf-ssh-apply = {
-            type = "app";
-            program = "${self.packages.${system}.cf-ssh-apply}/bin/cf-ssh-apply";
-            meta.description = "Render infra/cloudflare/nixpi-ssh.nix (terranix) and tofu apply it (needs CLOUDFLARE_API_TOKEN)";
-          };
-          cf-ssh-destroy = {
-            type = "app";
-            program = "${self.packages.${system}.cf-ssh-destroy}/bin/cf-ssh-destroy";
-            meta.description = "tofu destroy the nixpi ZTIA-SSH Cloudflare resources (needs CLOUDFLARE_API_TOKEN)";
-          };
-        })
-      );
+      apps =
+        nixpkgs.lib.recursiveUpdate
+          {
+            aarch64-linux.nixvm = {
+              type = "app";
+              program = "${self.packages.aarch64-linux.nixvm}/bin/nixvm";
+              meta.description = "Bootstrap NixOS nixvm on aarch64-linux from the live ISO via disko-install";
+            };
+          }
+          (
+            forAllSystems (system: {
+              cf-ssh-apply = {
+                type = "app";
+                program = "${self.packages.${system}.cf-ssh-apply}/bin/cf-ssh-apply";
+                meta.description = "Render infra/cloudflare/nixpi-ssh.nix (terranix) and tofu apply it (needs CLOUDFLARE_API_TOKEN)";
+              };
+              cf-ssh-destroy = {
+                type = "app";
+                program = "${self.packages.${system}.cf-ssh-destroy}/bin/cf-ssh-destroy";
+                meta.description = "tofu destroy the nixpi ZTIA-SSH Cloudflare resources (needs CLOUDFLARE_API_TOKEN)";
+              };
+            })
+          );
 
       # ---- Multi-architecture dev shell --------------------------------------
       # `nix develop` on any target. Used as the default Devcontainer profile.

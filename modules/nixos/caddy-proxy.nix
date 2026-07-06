@@ -103,24 +103,22 @@ in
 
     services.caddy = {
       enable = true;
-      email = cfg.email;
+      inherit (cfg) email;
 
-      virtualHosts = lib.mapAttrs (
-        _hostname: vhost: {
-          extraConfig =
-            (
-              if vhost.reverseProxyTo != null then
-                "reverse_proxy ${vhost.reverseProxyTo}"
-              else
-                ''
-                  root * ${vhost.root}
-                  file_server
-                ''
-            )
-            + "\n"
-            + vhost.extraConfig;
-        }
-      ) cfg.virtualHosts;
+      virtualHosts = lib.mapAttrs (_hostname: vhost: {
+        extraConfig =
+          (
+            if vhost.reverseProxyTo != null then
+              "reverse_proxy ${vhost.reverseProxyTo}"
+            else
+              ''
+                root * ${vhost.root}
+                file_server
+              ''
+          )
+          + "\n"
+          + vhost.extraConfig;
+      }) cfg.virtualHosts;
     };
   };
 }
