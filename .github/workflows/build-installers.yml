@@ -23,7 +23,10 @@ on:
 
 concurrency:
   group: build-installers-${{ github.ref }}
-  cancel-in-progress: true
+  # false: this workflow publishes a matched pair of images to the same rolling
+  # release. Cancelling one matrix leg mid-upload on a rapid double-push could
+  # leave installer-latest with one image updated and the other stale.
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -80,7 +83,7 @@ jobs:
           command: cachix push ismailkattakath result
 
       - name: Publish to installer-latest release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: installer-latest
           name: "Installer Images (latest)"
