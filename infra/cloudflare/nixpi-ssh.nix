@@ -136,40 +136,29 @@ in
         };
       }
     ];
-    # v5: the application attaches REUSABLE policies by id + precedence. The
-    # policy resource itself no longer carries application_id/precedence.
+    # v5: an infrastructure app defines its policy INLINE (every policies[] field
+    # is optional; no separate reusable policy resource is needed). `include` is
+    # the identity gate (owner's Workspace domain); `connection_rules.ssh.usernames`
+    # names which UNIX login(s) the short-lived cert may assert — sshd matches the
+    # cert principal to the login user with just TrustedUserCAKeys set (no
+    # AuthorizedPrincipalsFile/Command needed). `include` is REQUIRED whenever
+    # `connection_rules` is present.
     policies = [
       {
-        id = "\${cloudflare_zero_trust_access_policy.nixpi_ssh_allow.id}";
+        name = "Allow ${allowEmailDomain} as ${sshUsername}";
+        decision = "allow";
         precedence = 1;
-        # v5 REQUIRES connection_rules on an infrastructure app's policy binding:
-        # which UNIX login(s) the short-lived cert may assert. sshd matches the
-        # cert principal to the login user with just TrustedUserCAKeys set (no
-        # AuthorizedPrincipalsFile/Command needed).
+        include = [
+          {
+            email_domain = {
+              domain = allowEmailDomain;
+            };
+          }
+        ];
         connection_rules = {
           ssh = {
             usernames = [ sshUsername ];
           };
-        };
-      }
-    ];
-  };
-
-  # ---- (c) Access policy: owner's identity + allowed UNIX login -------------
-  # decision = "allow"; connection_rules.ssh.usernames is the ZTIA-specific
-  # field naming which cert principal(s) this policy permits — sshd then
-  # matches the cert principal against the login user with just
-  # TrustedUserCAKeys set (no AuthorizedPrincipalsFile/Command needed).
-  resource.cloudflare_zero_trust_access_policy.nixpi_ssh_allow = {
-    account_id = accountId;
-    # v5: a reusable policy — no application_id, no precedence here (precedence
-    # lives on the application's `policies` list that references this one).
-    name = "Allow ${allowEmailDomain} as ${sshUsername}";
-    decision = "allow";
-    include = [
-      {
-        email_domain = {
-          domain = allowEmailDomain;
         };
       }
     ];
