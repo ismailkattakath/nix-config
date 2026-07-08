@@ -37,20 +37,30 @@ expensive, non-cancellable runs.
 
 The PR title is a **comma-separated list of the components the change touches**,
 not a prose sentence. As a consolidated PR grows, keep the title in sync with the
-combined scope. Components are drawn from two sources:
+combined scope. Each component is derived — don't consult a fixed enumeration,
+apply the rule:
 
-1. **First-level `nix flake show` categories** — the flake output touched:
-   `apps`, `checks`, `packages`, `nixosConfigurations`, `darwinConfigurations`,
-   `formatter`, `devShells`.
-2. **Top-level dot-folders / non-nix areas**, mapped to short names:
-   - `.claude` → `claude`
-   - `.github` → `github`
-   - `.vscode` → `vscode`
-   - `.devcontainer` → `devcontainer`
-   - `docs` → `docs` (covers `docs/`, any `*.md`, and `CLAUDE.md`)
+1. **A first-level `nix flake show` output category** when the change touches a
+   flake output — e.g. `apps`, `checks`, `packages`, `nixosConfigurations`,
+   `darwinConfigurations`, `formatter`, `devShells`. This is a **semantic** map
+   from source path to output (`modules/darwin/*` → `darwinConfigurations`,
+   `hosts/nixpi*` → `nixosConfigurations`, `packages/*` → `packages`, and so on),
+   so it needs judgment and a maintained path→output mapping.
+2. **A top-level directory named by stripping its leading dot** — `.claude` →
+   `claude`, `.github` → `github`, `.vscode` → `vscode`, `.devcontainer` →
+   `devcontainer`, and so on. These mappings are **illustrative, not exhaustive**:
+   ANY top-level dot-folder maps to its own de-dotted name automatically, so a new
+   one needs no edit to this rule. (`docs` also falls here, covering `docs/`, any
+   `*.md`, and `CLAUDE.md`.)
 
 List every touched component, comma-separated. Example: a PR touching
 `modules/darwin/*` + `.claude/rules/*` + `docs/` → title `darwinConfigurations, claude, docs`.
+
+**Note the asymmetry.** The dot-folder half (2) is **mechanically** derivable from
+the path — strip the dot — so a hook could generate it automatically. The
+flake-output half (1) is a **semantic** mapping requiring judgment against a
+maintained path→output map, which a hook could not derive reliably. That is why
+this stays a prompt rule rather than a fully mechanical one.
 
 ## Update comment trail
 
