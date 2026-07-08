@@ -33,6 +33,44 @@ expensive, non-cancellable runs.
    unrelated change reviewable on its own). Explicit instruction overrides the
    default.
 
+## PR title
+
+The PR title is a **comma-separated list of the components the change touches**,
+not a prose sentence. As a consolidated PR grows, keep the title in sync with the
+combined scope. Components are drawn from two sources:
+
+1. **First-level `nix flake show` categories** — the flake output touched:
+   `apps`, `checks`, `packages`, `nixosConfigurations`, `darwinConfigurations`,
+   `formatter`, `devShells`.
+2. **Top-level dot-folders / non-nix areas**, mapped to short names:
+   - `.claude` → `claude`
+   - `.github` → `github`
+   - `.vscode` → `vscode`
+   - `.devcontainer` → `devcontainer`
+   - `docs` → `docs` (covers `docs/`, any `*.md`, and `CLAUDE.md`)
+
+List every touched component, comma-separated. Example: a PR touching
+`modules/darwin/*` + `.claude/rules/*` + `docs/` → title `darwinConfigurations, claude, docs`.
+
+## Update comment trail
+
+Every time an already-open PR is **updated** — i.e. each push of new commits onto
+its branch — post a **new** PR comment summarizing that update's changes:
+
+```bash
+gh pr comment <n> --body "<what this push changed and why>"
+```
+
+The comment is posted at **push time** (that is when the PR actually updates). The
+PR's comment thread thus becomes a chronological trail of every mutation batched
+into the consolidated PR: reading the comments top-to-bottom tells you what changed
+and when, keeping the one-PR-per-session model auditable.
+
+Optional enhancement: also maintain a running `## Changelog` in the PR **body**,
+edited each update (the body reflects the *current* combined state; the comments are
+the *chronological* trail). The per-update comment is the required part; the body
+changelog is a nicety.
+
 ## Quick check
 
 ```bash
