@@ -479,7 +479,7 @@ Then delete migrated originals.
 > Phase-2 migration pass — not two separate efforts.**
 
 1. **Reference bundled files only via `${CLAUDE_PLUGIN_ROOT}/...`** — never absolute paths
-   (`/Users/aloshy/...`, `/workspaces/nix-config`). *(= the audit's path-decoupling of the
+   (`~/...`, `/workspaces/nix-config`). *(= the audit's path-decoupling of the
    HOME hooks/commands.)*
 2. **No repo-coupled hooks/commands** — especially the audit's `commands/superhook-review.md`
    (make its mapping discovery-based, §2) and `hooks/memory-loader.js` home half (genericize

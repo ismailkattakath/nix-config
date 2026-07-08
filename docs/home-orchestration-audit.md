@@ -3,7 +3,7 @@
 **Scope:** Read-only audit of whether the v2 plan's HOME / PROJECT / SPLIT classification
 (plan §2 table) cleanly separates portable HOME rules from this-repo-specific PROJECT rules
 with no cross-contamination. No files changed. Evidence cites real assets under
-`/Users/aloshy/ismailkattakath/nix-config/.claude/`.
+`~/ismailkattakath/nix-config/.claude/`.
 
 **Overall verdict: QUALIFIED NO** — the *design intent* is sound and the plan already
 names the two big transforms (re-mechanize `delegate-team.js`; genericize `stop-gate.js`),

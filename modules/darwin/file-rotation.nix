@@ -13,6 +13,7 @@
   config,
   lib,
   userName,
+  domainName,
   ...
 }:
 
@@ -22,6 +23,9 @@ let
     mkIf
     types
     imap0
+    concatStringsSep
+    reverseList
+    splitString
     ;
 
   cfg = config.services.fileRotation;
@@ -29,17 +33,25 @@ let
   # Derive the home from the declared user rather than hardcoding /Users/<name>.
   home = config.users.users.${userName}.home;
 
+  # Identity-neutral reverse-DNS namespace derived from the fleet domain rather
+  # than a personal handle: "kattakath.com" → "com.kattakath".
+  rdns = concatStringsSep "." (reverseList (splitString "." domainName));
+
   # Build one launchd user agent (a { name; value; } pair) per rotation entry.
   mkAgent =
     index: entry:
     let
-      # Stable label: the caller-supplied name, else a positional fallback.
-      label = if entry.name != null then entry.name else "file-rotation-${toString index}";
+      # Short, human-readable name for logs: caller-supplied, else positional.
+      shortName = if entry.name != null then entry.name else toString index;
+
+      # launchd Label under the domain-derived reverse-DNS namespace, e.g.
+      # "com.kattakath.file-rotation.screengrab-rotate".
+      label = "${rdns}.file-rotation.${shortName}";
 
       # maxAgeDays=1 ⇒ "older than 24h" ⇒ find -mmin +1440.
       ageMin = entry.maxAgeDays * 1440;
 
-      logFile = "${home}/Library/Logs/file-rotation-${label}.log";
+      logFile = "${home}/Library/Logs/file-rotation-${shortName}.log";
 
       # Top-level regular files older than the cutoff, excluding .DS_Store.
       # macOS /usr/bin/find (BSD) supports -mmin, so this needs no GNU findutils.
@@ -72,6 +84,9 @@ let
       name = label;
       value = {
         serviceConfig = {
+          # Explicit Label so it is the domain-derived rDNS string itself, not
+          # nix-darwin's default "${labelPrefix}.${name}" (org.nixos.…) prefix.
+          Label = label;
           StartInterval = entry.interval;
           RunAtLoad = true;
           StandardOutPath = logFile;
@@ -129,7 +144,7 @@ in
           name = mkOption {
             type = types.nullOr types.str;
             default = null;
-            description = "Stable launchd label; defaults to file-rotation-<index> when null.";
+            description = "Short label component under the domain rDNS namespace (e.g. <rdns>.file-rotation.<name>); defaults to the positional index when null.";
           };
         };
       }
