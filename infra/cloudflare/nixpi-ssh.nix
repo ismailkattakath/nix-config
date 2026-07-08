@@ -142,6 +142,15 @@ in
       {
         id = "\${cloudflare_zero_trust_access_policy.nixpi_ssh_allow.id}";
         precedence = 1;
+        # v5 REQUIRES connection_rules on an infrastructure app's policy binding:
+        # which UNIX login(s) the short-lived cert may assert. sshd matches the
+        # cert principal to the login user with just TrustedUserCAKeys set (no
+        # AuthorizedPrincipalsFile/Command needed).
+        connection_rules = {
+          ssh = {
+            usernames = [ sshUsername ];
+          };
+        };
       }
     ];
   };
@@ -164,11 +173,6 @@ in
         };
       }
     ];
-    connection_rules = {
-      ssh = {
-        usernames = [ sshUsername ];
-      };
-    };
   };
 
   # ---- Outputs -----------------------------------------------------------------
@@ -176,6 +180,6 @@ in
     value = applicationId;
   };
   output.nixpi_ssh_target_id = {
-    value = "\${cloudflare_zero_trust_infrastructure_access_target.nixpi.id}";
+    value = "\${cloudflare_zero_trust_access_infrastructure_target.nixpi.id}";
   };
 }
