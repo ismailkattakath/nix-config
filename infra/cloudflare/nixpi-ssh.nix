@@ -107,7 +107,9 @@ in
   };
 
   # ---- (a) Infrastructure Access target: hostname label + IP + VNet ---------
-  resource.cloudflare_zero_trust_infrastructure_access_target.nixpi = {
+  # v5 resource name is cloudflare_zero_trust_access_infrastructure_target
+  # (NOT ..._infrastructure_access_target — the words are swapped).
+  resource.cloudflare_zero_trust_access_infrastructure_target.nixpi = {
     account_id = accountId;
     hostname = targetHostname;
     ip = {
@@ -127,12 +129,19 @@ in
       {
         port = sshPort;
         protocol = "SSH";
-        target_attributes = [
-          {
-            name = "hostname";
-            values = [ targetHostname ];
-          }
-        ];
+        # v5: target_attributes is a MAP of attribute name -> list of values,
+        # NOT a list of { name, values } objects.
+        target_attributes = {
+          hostname = [ targetHostname ];
+        };
+      }
+    ];
+    # v5: the application attaches REUSABLE policies by id + precedence. The
+    # policy resource itself no longer carries application_id/precedence.
+    policies = [
+      {
+        id = "\${cloudflare_zero_trust_access_policy.nixpi_ssh_allow.id}";
+        precedence = 1;
       }
     ];
   };
@@ -144,10 +153,10 @@ in
   # TrustedUserCAKeys set (no AuthorizedPrincipalsFile/Command needed).
   resource.cloudflare_zero_trust_access_policy.nixpi_ssh_allow = {
     account_id = accountId;
-    application_id = applicationId;
+    # v5: a reusable policy — no application_id, no precedence here (precedence
+    # lives on the application's `policies` list that references this one).
     name = "Allow ${allowEmailDomain} as ${sshUsername}";
     decision = "allow";
-    precedence = 1;
     include = [
       {
         email_domain = {
