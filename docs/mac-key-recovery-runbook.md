@@ -118,3 +118,18 @@ decrypt its *own* secret with its host key, so you could pull the plaintexts off
 the live hosts and re-key to a fresh operator key. If that trade sounds bad, keep
 a copy of `id_ed25519.age` somewhere durable and offline (it is still
 passphrase-encrypted) before deleting the iCloud copy.
+
+## Manual steps Nix can't do
+
+`darwin-rebuild switch` restores everything declarative, but a few browser/GUI
+one-time steps are inherently manual — do these after activating a fresh Mac:
+
+- **Kapture Chrome extension** — the MCP gateway's `kapture` server
+  (`modules/shared/mcp.nix`) is a `stdio<->WebSocket` bridge that stays **inert
+  until the Kapture Chrome DevTools extension is installed** and its DevTools panel
+  is open on a tab. Install it per <https://williamkapke.github.io/kapture/welcome>;
+  nothing in Nix can do this, and the other gateway servers work without it.
+- **App logins / personal tokens** — `gh` / `hf` / `docker` / `claude` one-time CLI
+  logins and any Keychain-stored personal tokens are re-established by hand (Nix
+  manages only the *service* secrets via agenix — see the "Secrets — agenix"
+  convention in `CLAUDE.md`, not personal logins).
