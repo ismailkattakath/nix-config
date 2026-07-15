@@ -200,7 +200,12 @@
         system:
         terranix.lib.terranixConfiguration {
           inherit system;
-          modules = [ ./infra/cloudflare/nixpi-ssh.nix ];
+          # Thread the single identity binding in so the ZTIA SSH login the cert may
+          # assert always tracks `users.users.${userName}` on nixpi (no drift).
+          modules = [
+            ./infra/cloudflare/nixpi-ssh.nix
+            { _module.args.userName = userName; }
+          ];
         };
 
       # writeShellApplication wrapper around `tofu <action>` for the rendered
