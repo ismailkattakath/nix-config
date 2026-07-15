@@ -127,8 +127,10 @@ one-time steps are inherently manual — do these after activating a fresh Mac:
 - **Kapture Chrome extension** — the MCP gateway's `kapture` server
   (`modules/shared/mcp.nix`) is a `stdio<->WebSocket` bridge that stays **inert
   until the Kapture Chrome DevTools extension is installed** and its DevTools panel
-  is open on a tab. Install it per <https://williamkapke.github.io/kapture/welcome>;
-  nothing in Nix can do this, and the other gateway servers work without it.
+  is open on a tab. Install it from the Chrome Web Store (extension id
+  `ejfnegenodbdcodemkibocefmajjjjbn`):
+  <https://chromewebstore.google.com/detail/kapture-mcp-browser-autom/ejfnegenodbdcodemkibocefmajjjjbn>.
+  Nothing in Nix installs it, and the other gateway servers work without it.
 - **App logins / personal tokens** — `gh` / `hf` / `docker` / `claude` one-time CLI
   logins and any Keychain-stored personal tokens are re-established by hand (Nix
   manages only the *service* secrets via agenix — see the "Secrets — agenix"
