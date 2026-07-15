@@ -4,11 +4,9 @@
 > `services.openssh-ca-trust.enable = true` **and** `removeStaticKey = true`, so
 > network SSH is **cert-only** and the legacy static key is gone. The rollout
 > steps below are retained as the design record + re-run/break-glass reference,
-> not a pending to-do.
-
-> See [`docs/ztia-rollout-runbook.md`](ztia-rollout-runbook.md) for the
-> concrete, step-by-step operator walkthrough of the rollout order summarized
-> in §9 below (token scopes, dashboard paths, verification commands).
+> not a pending to-do. (The former step-by-step `ztia-rollout-runbook.md` — the
+> executed 2026-07-08 procedure — has been folded away; §9 below is the rollout
+> order, and git history preserves the detailed one-time commands.)
 
 This document describes the **Cloudflare Access for Infrastructure (ZTIA)**
 SSH design for this repo's 3-host aarch64 fleet (`macos`, `nixpi`, `nixvm`).
@@ -369,12 +367,10 @@ executing the runbook in §9.)
 | `macos` — ZTIA client (WARP), no server modules | `hosts/macos.nix` |
 | Cloudflare-side ZTIA objects (target/application/policy) | `infra/cloudflare/nixpi-ssh.nix` |
 | terranix input + `cf-ssh-apply`/`cf-ssh-destroy` apps | `flake.nix` |
-| Token file (operator-placed, plain, unchanged) | `/etc/secrets/cloudflared-token` on `nixpi` |
+| Tunnel token (agenix) | `secrets/cloudflared-token.age` → `/run/agenix/cloudflared-token` on `nixpi` |
 | Tunnel + ingress + DNS provisioning (terranix, `cf-tunnel-apply`; unaffected by ZTIA) | `infra/cloudflare/nixpi-tunnel.nix` |
-| Concrete step-by-step rollout walkthrough (this doc's §9, expanded) | `docs/ztia-rollout-runbook.md` |
-
 ### Related skills
 
 - `cloudflare-one` — general Cloudflare One / ZTIA guidance this doc draws on.
 - `cloudflared-tunnel` — the ZTIA SSH setup playbook for `nixpi` itself (CA provisioning, terranix apply, host-side wiring, WARP client enrollment); this doc is its authoritative cross-reference for the full rollout order.
-- `nixos-flake-install` / `utm-vm-provision` / `nixvm-utm-prebuild-on-devcontainer` — bring up `nixvm` itself (unaffected by this cutover).
+- `nixos-flake-install` / `nixvm-qemu-provision` — bring up `nixvm` itself (unaffected by this cutover).

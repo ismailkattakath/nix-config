@@ -7,14 +7,14 @@ description: >
   the aarch64-linux CI runner VM", or "install NixOS in QEMU on the Mac". Covers the pre-generated
   SSH host key that agenix depends on, the installer ISO, the EDK2 NVRAM reset that stops the VM
   dropping to the UEFI Shell after install, and detaching the ISO before the second boot. This is
-  the CURRENT, VERIFIED path — it supersedes utm-vm-provision.
+  the CURRENT, VERIFIED path — it supersedes the older UTM-based provisioning.
 ---
 
 # nixvm provisioning — headless QEMU + HVF on macOS
 
 `nixvm` is the fleet's **aarch64-linux sandbox VM** and the **only aarch64-linux CI runner**. It
 runs on the Mac as an ordinary `qemu-system-aarch64` process with HVF acceleration. **UTM is not
-involved.** (The old `utm-vm-provision` skill is kept only for UTM-specific reference material; its
+involved.** (The old UTM-based flow has been removed; its
 "create the VM from the CLI, NO GUI required — VERIFIED" claim is **false on a fresh Mac** —
 `utmctl` never sees a hand-authored bundle, and the `osascript` restart-UTM workaround is blocked by
 TCC with error **-1728** "not allowed assistive access", which cannot be granted programmatically.)
@@ -37,8 +37,7 @@ TCC with error **-1728** "not allowed assistive access", which cannot be granted
   deploy target, not a builder), and not the repo devcontainer — Docker Desktop on macOS does not
   expose `/dev/kvm` to containers, verified even on an M3 Pro (`ls -l /dev/kvm` → No such file).
   A whole skill (`nixvm-utm-prebuild-on-devcontainer`) was built on the premise that the
-  devcontainer could produce that qcow2; it could not, and is now marked SUPERSEDED/defunct (it
-  still lives under `.claude/skills/` for reference). **We do not need a
+  devcontainer could produce that qcow2; it could not, and has been deleted. **We do not need a
   prebuilt qcow2 at all any more** — `nixos-anywhere --build-on remote` makes the guest build
   itself, so an empty disk plus the installer ISO is enough.
 - The installer ISO (`packages.aarch64-linux.nixvm-installer-iso`) has **no** `requiredSystemFeatures`
@@ -225,7 +224,7 @@ Delete `$EXTRA` (it holds the private host key) once you are done.
 
 ## Cross-references
 
-- **utm-vm-provision** — SUPERSEDED by this skill. Retained only for UTM-specific reference
-  (qcow2 sizing, `vmnet-shared`/ARP, UEFI boot-order quirks).
+- The old **utm-vm-provision** / **nixvm-utm-prebuild-on-devcontainer** (UTM-based) skills have
+  been **removed** — this skill replaces them.
 - **nixos-flake-install** — the manual in-guest `nixos-install` flow; `nixos-anywhere` replaces it
   here.

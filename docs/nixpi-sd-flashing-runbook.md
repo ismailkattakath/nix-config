@@ -47,9 +47,8 @@ If you remember one thing from this doc: **confirm the ~5.6 GB byte count.**
 ## 2. Build the image
 
 `nix` is absent on the client Mac (`macos`), so build on an aarch64-linux
-builder — the repo's **devcontainer** (see the
-`nixvm-utm-prebuild-on-devcontainer` skill, same Nix-in-Docker setup) or an
-aarch64-linux CI runner / host.
+builder — the repo's **devcontainer** (Nix-in-Docker on Apple Silicon) or the
+`nixvm` aarch64-linux CI runner / any aarch64-linux host.
 
 ```bash
 git add -A                                                            # flakes ignore untracked files

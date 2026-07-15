@@ -76,7 +76,7 @@ ssh root@192.168.64.x 'mkdir -p /root/.ssh && cat >> /root/.ssh/authorized_keys'
 ```
 
 (Port-forward `2222→22` → `ssh -p 2222 root@localhost` is an alternative. See
-**utm-vm-provision** for networking setup.)
+**nixvm-qemu-provision** for the current headless-QEMU networking setup.)
 
 ## 2. Bootstrap (single command)
 
@@ -125,8 +125,8 @@ hostname; nixos-version
   ```
   Read the **effective** sshd config with `sshd -T` **inside the chroot** — not
   `/mnt/etc/ssh/sshd_config`, and not the live ISO's own config.
-- **Force-boot the ISO / fix bloated `efi_vars.fd`** — UTM-side; see the Recovery toolkit in
-  **utm-vm-provision** (detach `Drive.1`, move aside the bloated NVRAM).
+- **Force-boot the ISO / fix a bloated `efivars.fd`** — see the EDK2 NVRAM reset in
+  **nixvm-qemu-provision** (the headless-QEMU equivalent of the old UTM `Drive.1` detach).
 
 ## 5. nixpi — SD-image flow (different from nixvm)
 
