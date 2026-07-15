@@ -5,7 +5,10 @@
 #
 # SSH ACCESS: over the Cloudflare Tunnel connector below (remotely-managed,
 # token-based — no port-forward, no public IP). mDNS (nixpi.local) also works
-# on the LAN. The connector token is planted on the SD card's FAT FIRMWARE
+# on the LAN. Wi-Fi is provisioned the same way as the token (a wpa_supplicant.conf
+# planted on the FIRMWARE partition — see the wifi block below), so a headless nixpi
+# reaches nixpi.kattakath.com over the tunnel from first boot with no LAN cable,
+# keyboard, or monitor. The connector token is planted on the SD card's FAT FIRMWARE
 # partition (re-planted by the operator after each flash — macOS can write FAT;
 # see docs/nixpi-sd-flashing-runbook.md) and copied into a root-only /run file by
 # a oneshot before the connector starts. This deliberately does NOT use agenix:
@@ -28,6 +31,7 @@
 # `nixvm` does NOT import this option — it stays on the static key.
 {
   lib,
+  pkgs,
   ...
 }:
 {
@@ -111,6 +115,58 @@
         exit 1
       fi
     '';
+  };
+
+  # WIFI from the FIRMWARE partition — the SAME plant-a-file model as the token, so
+  # a headless nixpi with NO LAN cable (and no keyboard/monitor) still associates
+  # to Wi-Fi and brings the tunnel up from first boot. The Pi 4's brcmfmac driver +
+  # 43455 firmware/NVRAM already ship in the closure (hardware.enableRedistributable-
+  # Firmware, set by raspberry-pi-nix); all that's missing is credentials, which we
+  # keep OUT of the image and read at runtime from the card.
+  #
+  # Plant a standard wpa_supplicant.conf at /boot/firmware/wpa_supplicant.conf
+  # (must include `country=` — the Pi 4 radio stays rfkill-blocked without a
+  # regulatory domain — plus a `network={ ssid=…; psk=… }` block). A oneshot copies
+  # it to a root-only /run file; our wpa_supplicant unit associates wlan0; dhcpcd
+  # (networking.useDHCP) then leases it. eth0 stays DHCP whenever a cable is present,
+  # so LAN remains a fallback and neither path is mandatory. Wi-Fi is OPTIONAL: with
+  # no conf planted the units skip cleanly (no failed units), leaving LAN-only.
+  # Change networks by rewriting the file and rebooting.
+  systemd.services.wifi-provision = {
+    description = "Install wpa_supplicant.conf from the FIRMWARE partition";
+    before = [ "wpa_supplicant-firmware.service" ];
+    wantedBy = [ "multi-user.target" ];
+    unitConfig.RequiresMountsFor = "/boot/firmware";
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    # exit 0 even when absent — Wi-Fi is optional; the wpa_supplicant unit's
+    # ConditionPathExists gates whether it actually starts.
+    script = ''
+      src=/boot/firmware/wpa_supplicant.conf
+      dst=/run/wpa_supplicant-firmware.conf
+      if [ -f "$src" ]; then
+        install -m600 "$src" "$dst"
+        ${pkgs.util-linux}/bin/rfkill unblock wifi || true
+      else
+        echo "wifi-provision: $src not found — no Wi-Fi configured (LAN only)." >&2
+      fi
+    '';
+  };
+
+  systemd.services.wpa_supplicant-firmware = {
+    description = "wpa_supplicant on wlan0 (config planted on FIRMWARE)";
+    after = [ "wifi-provision.service" ];
+    wants = [ "wifi-provision.service" ];
+    wantedBy = [ "multi-user.target" ];
+    # Skip cleanly (not a failure) when no Wi-Fi config was planted.
+    unitConfig.ConditionPathExists = "/run/wpa_supplicant-firmware.conf";
+    serviceConfig = {
+      ExecStart = "${pkgs.wpa_supplicant}/bin/wpa_supplicant -c /run/wpa_supplicant-firmware.conf -i wlan0";
+      Restart = "on-failure";
+      RestartSec = 5;
+    };
   };
 
   # ZTIA: trust Cloudflare's SSH CA for short-lived certificates AND drop the
