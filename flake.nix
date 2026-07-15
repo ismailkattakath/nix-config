@@ -675,6 +675,13 @@
             action = "destroy";
           };
         }))
+
+        # `set-secret <KEY> [VALUE]` — write an env-var export into the
+        # host-local ~/.secrets file sourced at login (modules/shared/home.nix).
+        # Both fleet systems; pure nixpkgs deps, so callPackage autofills.
+        (forAllSystems (system: {
+          set-secret = (pkgsFor system).callPackage ./packages/set-secret.nix { };
+        }))
       ];
 
       # ---- Apps: bootstrap installer + Cloudflare provisioning ---------------
@@ -819,6 +826,11 @@
                 type = "app";
                 program = "${self.packages.${system}.cf-tunnel-destroy}/bin/cf-tunnel-destroy";
                 meta.description = "tofu destroy the nixpi Cloudflare tunnel/ingress/CNAME (needs CLOUDFLARE_API_TOKEN)";
+              };
+              set-secret = {
+                type = "app";
+                program = "${self.packages.${system}.set-secret}/bin/set-secret";
+                meta.description = "Write 'export KEY=VALUE' into the host-local ~/.secrets file (sourced at login); omit VALUE for a hidden prompt";
               };
             })
           );
