@@ -2,11 +2,14 @@
 # The single home of "user logic"; platform branches live in modules/linux and
 # modules/darwin.
 #
-# Personal tokens are intentionally NOT managed here. On macOS raw env-var
-# tokens live in the login Keychain (exported by ~/.zprofile); the rest use
-# one-time CLI logins (gh/hf/docker/claude). System/service secrets (e.g. the
-# cloudflared tunnel token) are operator-placed `/etc/secrets/*` root-only
-# files on each host — no agenix, nothing managed from this repo.
+# Personal token VALUES are intentionally NOT managed here. Raw env-var tokens
+# (e.g. CIVITAI_TOKEN) live in a host-local, chmod-600 `~/.secrets` file that is
+# git-ignored and never enters the world-readable store; the zsh block below
+# only sources it at login (`. ~/.secrets`, guarded so it is a no-op where the
+# file is absent). The rest use one-time CLI logins (gh/hf/docker/claude).
+# System/service secrets (e.g. the cloudflared tunnel token) are operator-placed
+# `/etc/secrets/*` root-only files on each host — no agenix, nothing managed
+# from this repo.
 #
 # Deliberately MINIMAL: no nixvim/tmux — the operator uses VSCode/Cursor and
 # prefers a lean profile with starship for the shell prompt. Add tools only for
@@ -157,6 +160,12 @@ in
     # A login shell is required for `home-manager switch` to wire session vars.
     bash = {
       enable = true;
+      # Twin of the zsh profileExtra below: source the host-local ~/.secrets on
+      # a bash login too, so personal-token env vars (e.g. CIVITAI_TOKEN) are
+      # present regardless of which login shell is used. `-r` guards absence.
+      profileExtra = ''
+        [ -r "$HOME/.secrets" ] && . "$HOME/.secrets"
+      '';
     };
 
     # zsh as the interactive shell — matches the devcontainer default
@@ -210,6 +219,17 @@ in
       enableCompletion = true;
       autosuggestion.enable = true;
       syntaxHighlighting.enable = true;
+
+      # Source host-local personal-token env vars at login. `~/.secrets` is a
+      # chmod-600 file placed by hand on each machine, git-ignored and NEVER
+      # committed, so the token values stay out of the world-readable Nix store.
+      # We can't hand-edit ~/.zprofile (home-manager owns it as a read-only
+      # store symlink), so the sourcing hook must live here. Login-shell scope
+      # (.zprofile) so GUI apps inherit the vars too; the `-r` test makes it a
+      # clean no-op on any host that has no ~/.secrets.
+      profileExtra = ''
+        [ -r "$HOME/.secrets" ] && . "$HOME/.secrets"
+      '';
     };
 
     # ---- VS Code (macOS only) --------------------------------------------------
