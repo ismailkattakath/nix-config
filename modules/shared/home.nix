@@ -188,6 +188,7 @@ in
     ++ lib.optionals stdenv.isDarwin [
       setSecret
       androidEmu
+      jdk17 # JRE for the Android sdkmanager/avdmanager (JVM tools); emulator itself needs no Java
     ];
 
   # ---- Android SDK (macOS only) ------------------------------------------------
@@ -199,6 +200,8 @@ in
   # installs the SDK packages + creates the AVD on first run, then boots it.
   home.sessionVariables = lib.mkIf pkgs.stdenv.isDarwin {
     ANDROID_HOME = "/opt/homebrew/share/android-commandlinetools";
+    # sdkmanager/avdmanager are JVM tools; point them at the nixpkgs JDK 17.
+    JAVA_HOME = pkgs.jdk17.home;
   };
   home.sessionPath = lib.optionals pkgs.stdenv.isDarwin [
     "/opt/homebrew/share/android-commandlinetools/emulator"
