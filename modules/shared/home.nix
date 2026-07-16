@@ -110,7 +110,17 @@ in
   # .#cf-mcp-apply` and stores the printed token with `set-secret MCP_TUNNEL_TOKEN
   # <token>` (the connector is inert without it). See docs/mcp-connector-oauth-runbook.md.
   services.mcpGateway = lib.mkIf pkgs.stdenv.isDarwin {
-    publicServers = [ "kapture" ];
+    # PUBLIC, OAuth-gated connectors. kapture = browser control; a compromise
+    # costs a browser tab. desktop-commander = shell/filesystem/process control on
+    # THIS Mac — the operator host holding the fleet's sole SSH key, the agenix
+    # vault, Keychain-exported tokens and push access to main. Access gates the
+    # CALLER (only operatorEmail), so nobody else can connect; it does NOT gate
+    # what a prompt-injected Grok does once holding a valid token. Published
+    # knowingly on that basis. See modules/shared/mcp.nix.
+    publicServers = [
+      "kapture"
+      "desktop-commander"
+    ];
     publicTunnel.enable = true;
   };
 
