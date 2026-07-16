@@ -1,5 +1,5 @@
 {
-  description = "Greenfield aarch64 Nix mono-repo: macOS (nix-darwin) client, a Raspberry Pi 4 NixOS server (nixpi), and a headless QEMU/HVF NixOS sandbox VM (nixvm) — single source of truth across the fleet.";
+  description = "Greenfield aarch64 Nix mono-repo: macOS (nix-darwin) client, a Raspberry Pi 4 NixOS server (nixpi), and a throwaway aarch64-linux NixOS dev VM (nixvm) booted only via `nix run .#nixvm-gui` — single source of truth across the fleet.";
 
   inputs = {
     # Unstable channel as the single source of truth for every platform.
@@ -151,6 +151,13 @@
       # secrets/secrets.nix — one file to edit on rotation (see secrets/operator-key.nix).
       operatorSshKey = import ./secrets/operator-key.nix;
 
+      # ---- Single source of truth for the live-wallpaper loopback port -------
+      # The darkhttpd server (modules/darwin/core.nix) serves packages/live-wallpaper
+      # on this port and Plash is pointed at it by the home.nix activation. Two
+      # module systems (nix-darwin + home-manager) that MUST agree, so it is one
+      # binding threaded to both rather than a literal duplicated across files.
+      wallpaperPort = 8765;
+
       # ---- Single source of truth for the Cloudflare account/zone ------------
       # Threaded (with domainName) into the cfTunnelConfig terranix stack via
       # `_module.args`, so the account/zone ids and the domain live in ONE place
@@ -160,7 +167,8 @@
       cloudflareZoneId = "6e28971881e488941d052bbbf50d69cd"; # the domainName zone
 
       # ---- DRY system mapping -------------------------------------------------
-      # A 3-host aarch64-only FLEET: no x86_64 HOST anywhere. Every package /
+      # A 2-host aarch64-only FLEET (macos + nixpi; nixvm is a throwaway build-vm):
+      # no x86_64 HOST anywhere. Every package /
       # devShell / check output is generated for the fleet systems via
       # forAllSystems. (The devcontainer IMAGE is the one multi-arch output — it
       # adds x86_64-linux via devcontainerSystems below, for Codespaces; that is a
@@ -330,7 +338,7 @@
       # Threaded into BOTH builders (mkNixos + mkDarwin) so system specialArgs and
       # the embedded Home-Manager block can never drift. Only args with a live
       # module consumer are carried: userName (core/host), fullName+userEmail
-      # (home.nix), orgName (github-runner/nixvm), domainName (nixpi's Caddy vhost
+      # (home.nix), orgName (github-runner), domainName (nixpi's Caddy vhost
       # + the darwin file-rotation launchd label). handleName has NO consumer — it
       # only builds userEmail above — so it is deliberately NOT threaded.
       identityArgs = {
@@ -355,6 +363,9 @@
               mcp-servers-nix
               agent-skills-vercel
               agent-skills-anthropic
+              # wallpaperPort: consumed by the darwin-gated Plash activation in
+              # home.nix (inert on the NixOS hosts).
+              wallpaperPort
               ;
           };
           users.${userName} = {
@@ -414,7 +425,10 @@
           inherit system;
           # Shared identity set (orgName feeds modules/darwin/github-runner.nix,
           # which registers the runner at github.com/${orgName}, org-level).
-          specialArgs = identityArgs;
+          # wallpaperPort → modules/darwin/core.nix's darkhttpd server.
+          specialArgs = identityArgs // {
+            inherit wallpaperPort;
+          };
           modules = [
             {
               nixpkgs.hostPlatform = system;
