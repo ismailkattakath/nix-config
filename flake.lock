@@ -151,26 +151,6 @@
         "url": "https://install.determinate.systems/determinate-nixd/tag/v3.21.5/x86_64-linux"
       }
     },
-    "disko": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1781152676,
-        "narHash": "sha256-RxWs5ND31KzTG7wvMM+PMfUjyNpmIEr999lqNARaM5o=",
-        "owner": "nix-community",
-        "repo": "disko",
-        "rev": "ff8702b4de27f72b4c78573dfb89ec74e36abdf1",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nix-community",
-        "repo": "disko",
-        "type": "github"
-      }
-    },
     "flake-compat": {
       "flake": false,
       "locked": {
@@ -290,21 +270,6 @@
       "original": {
         "type": "tarball",
         "url": "https://flakehub.com/f/cachix/git-hooks.nix/0.1.941"
-      }
-    },
-    "github-nix-ci": {
-      "locked": {
-        "lastModified": 1754092430,
-        "narHash": "sha256-S4Oe9aZK/UnWuj6zUlVeSDmC/QjEPHJm2gaSk/VMir4=",
-        "owner": "juspay",
-        "repo": "github-nix-ci",
-        "rev": "edd0486a9208524eff40712a8ce835260c5b412a",
-        "type": "github"
-      },
-      "original": {
-        "owner": "juspay",
-        "repo": "github-nix-ci",
-        "type": "github"
       }
     },
     "home-manager": {
@@ -592,9 +557,7 @@
         "agent-skills-anthropic": "agent-skills-anthropic",
         "agent-skills-vercel": "agent-skills-vercel",
         "determinate": "determinate",
-        "disko": "disko",
         "git-hooks": "git-hooks",
-        "github-nix-ci": "github-nix-ci",
         "home-manager": "home-manager_2",
         "mcp-servers-nix": "mcp-servers-nix",
         "nix-darwin": "nix-darwin",
