@@ -338,14 +338,14 @@
       # Threaded into BOTH builders (mkNixos + mkDarwin) so system specialArgs and
       # the embedded Home-Manager block can never drift. Only args with a live
       # module consumer are carried: userName (core/host), fullName+userEmail
-      # (home.nix), orgName (github-runner), domainName (nixpi's Caddy vhost
-      # + the darwin file-rotation launchd label). handleName has NO consumer — it
-      # only builds userEmail above — so it is deliberately NOT threaded.
+      # (home.nix), domainName (nixpi's Caddy vhost + the darwin file-rotation
+      # launchd label). handleName only builds userEmail above, and orgName is
+      # consumed only by PACKAGES (via callPackage, not specialArgs) now that the
+      # self-hosted runners are gone — so neither is threaded.
       identityArgs = {
         inherit
           userName
           fullName
-          orgName
           userEmail
           domainName
           ;
@@ -423,9 +423,8 @@
         }:
         nix-darwin.lib.darwinSystem {
           inherit system;
-          # Shared identity set (orgName feeds modules/darwin/github-runner.nix,
-          # which registers the runner at github.com/${orgName}, org-level).
-          # wallpaperPort → modules/darwin/core.nix's darkhttpd server.
+          # Shared identity set + wallpaperPort → modules/darwin/core.nix's
+          # darkhttpd live-wallpaper server.
           specialArgs = identityArgs // {
             inherit wallpaperPort;
           };
