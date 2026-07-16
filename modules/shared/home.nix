@@ -460,7 +460,7 @@ in
       fi
     '';
 
-    # Point Plash (masApps, modules/darwin/homebrew.nix) at the local learning-lab
+    # Point Plash (masApps, modules/darwin/homebrew.nix) at the local live-wallpaper
     # server (modules/darwin/core.nix) so the page is the desktop wallpaper. Plash
     # stores its site list in its OWN prefs (not a file we manage), so this is a
     # one-time GUI-scheme call guarded on absence — it runs once on a fresh Mac and

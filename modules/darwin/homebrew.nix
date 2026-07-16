@@ -117,7 +117,7 @@ _:
 
     # ---- Mac App Store apps (masApps) --------------------------------------
     # Plash (com.sindresorhus.Plash) — renders a web page as the desktop wallpaper,
-    # pointed at the local learning-lab HTTP server (modules/darwin/core.nix) so
+    # pointed at the local live-wallpaper HTTP server (modules/darwin/core.nix) so
     # the page gets a real http:// origin (its localStorage/state break on file://).
     # App-Store-only (no Homebrew cask), so it comes via `mas` (brew above) — needs
     # a one-time App Store sign-in. (Xcode still comes via the `xcodes` brew, not mas.)
