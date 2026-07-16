@@ -23,6 +23,38 @@
         "type": "github"
       }
     },
+    "agent-skills-anthropic": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1784156549,
+        "narHash": "sha256-dSBhidXnPOCUTPa7z4fvovM0hbNCD0Lnu6o00sAlo3I=",
+        "owner": "anthropics",
+        "repo": "claude-code",
+        "rev": "c39cb0f14bfe8bb519bae5bfc55add6867c5e2ab",
+        "type": "github"
+      },
+      "original": {
+        "owner": "anthropics",
+        "repo": "claude-code",
+        "type": "github"
+      }
+    },
+    "agent-skills-vercel": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1784150154,
+        "narHash": "sha256-b9jf4uiEkmMAp/k/+585/e/l+ursMo2YQX4H0sCig2k=",
+        "owner": "vercel-labs",
+        "repo": "skills",
+        "rev": "6b0f6fe56ac1e8c8fddc49f1a780076184c0c039",
+        "type": "github"
+      },
+      "original": {
+        "owner": "vercel-labs",
+        "repo": "skills",
+        "type": "github"
+      }
+    },
     "brew-src": {
       "flake": false,
       "locked": {
@@ -557,6 +589,8 @@
     "root": {
       "inputs": {
         "agenix": "agenix",
+        "agent-skills-anthropic": "agent-skills-anthropic",
+        "agent-skills-vercel": "agent-skills-vercel",
         "determinate": "determinate",
         "disko": "disko",
         "git-hooks": "git-hooks",

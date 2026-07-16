@@ -24,6 +24,10 @@
   config,
   fullName,
   userEmail,
+  # Source-only flake inputs holding Claude Code skills (see programs.claude-code
+  # below). flake.nix pins them; nothing is vendored into this repo.
+  agent-skills-vercel,
+  agent-skills-anthropic,
   ...
 }:
 let
@@ -140,13 +144,26 @@ in
       enable = true;
       package = claudeCode;
 
-      # Flake-managed GLOBAL skills for Claude Code — the declarative,
-      # reproducible replacement for `npx skills add --global` (which drops a loose
-      # symlink into ~/.claude/skills). Each entry writes ~/.claude/skills/<name>/
-      # at activation from a dir vendored under ./skills, so a `darwin-rebuild
-      # switch` reproduces it on any machine. (Repo-SPECIFIC skills stay in
-      # .claude/skills/ and activate only when working in this repo.)
-      skills.find-skills = ../../skills/find-skills;
+      # Flake-managed GLOBAL skills for Claude Code — the declarative, reproducible
+      # replacement for `npx skills add --global` (which drops a loose symlink into
+      # ~/.claude/skills). Each entry writes ~/.claude/skills/<name>/ at activation
+      # from a PINNED flake input (flake.nix), so a `darwin-rebuild switch`
+      # reproduces the exact skills on any machine and `nix flake update` bumps
+      # them — nothing vendored. (Repo-SPECIFIC skills stay in .claude/skills/ and
+      # activate only when working in this repo.)
+      skills = {
+        # Skill discovery from skills.sh (vercel-labs/skills).
+        find-skills = "${agent-skills-vercel}/skills/find-skills";
+        # Anthropic's official authoring toolkit for smarter claude-code project
+        # setup — plugin-dev (agent/skill/plugin) + hookify (hooks). The 3 other
+        # plugin-dev skills (command-development, hook-development, mcp-integration)
+        # are one line each if wanted.
+        agent-development = "${agent-skills-anthropic}/plugins/plugin-dev/skills/agent-development";
+        skill-development = "${agent-skills-anthropic}/plugins/plugin-dev/skills/skill-development";
+        plugin-structure = "${agent-skills-anthropic}/plugins/plugin-dev/skills/plugin-structure";
+        plugin-settings = "${agent-skills-anthropic}/plugins/plugin-dev/skills/plugin-settings";
+        writing-hookify-rules = "${agent-skills-anthropic}/plugins/hookify/skills/writing-rules";
+      };
     };
 
     git = {

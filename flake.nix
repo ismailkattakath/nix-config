@@ -85,6 +85,23 @@
     # Module-only flake (no nixpkgs input of its own — it uses the consumer's
     # pkgs), so there is nothing to `follows`.
     github-nix-ci.url = "github:juspay/github-nix-ci";
+
+    # ---- Agent skills for Claude Code (source-only, flake = false) -------------
+    # Placed at ~/.claude/skills/<name>/ declaratively by programs.claude-code.skills
+    # (modules/shared/home.nix, darwin-gated). Pinned in flake.lock, bumped via
+    # `nix flake update` — the reproducible replacement for imperative
+    # `npx skills add --global`, with NO vendored copies committed here.
+    # find-skills: skill discovery from skills.sh.
+    agent-skills-vercel = {
+      url = "github:vercel-labs/skills";
+      flake = false;
+    };
+    # Anthropic's official claude-code repo — source of the plugin-dev + hookify
+    # AUTHORING skills (agent/skill/plugin/hook development) for smarter setup.
+    agent-skills-anthropic = {
+      url = "github:anthropics/claude-code";
+      flake = false;
+    };
   };
 
   outputs =
@@ -104,6 +121,8 @@
       agenix,
       mcp-servers-nix,
       github-nix-ci,
+      agent-skills-vercel,
+      agent-skills-anthropic,
       ...
     }:
     let
@@ -349,7 +368,11 @@
           useGlobalPkgs = true;
           useUserPackages = true;
           extraSpecialArgs = identityArgs // {
-            inherit mcp-servers-nix;
+            inherit
+              mcp-servers-nix
+              agent-skills-vercel
+              agent-skills-anthropic
+              ;
           };
           users.${userName} = {
             imports = [ ./modules/shared/home.nix ];
