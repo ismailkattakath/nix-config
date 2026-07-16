@@ -155,11 +155,13 @@ in
         # Skill discovery from skills.sh (vercel-labs/skills).
         find-skills = "${agent-skills-vercel}/skills/find-skills";
         # Anthropic's official authoring toolkit for smarter claude-code project
-        # setup — plugin-dev (agent/skill/plugin) + hookify (hooks). The 3 other
-        # plugin-dev skills (command-development, hook-development, mcp-integration)
-        # are one line each if wanted.
+        # setup — the full plugin-dev skill set (agent/skill/command/hook/plugin/
+        # mcp authoring) plus hookify (hook rules).
         agent-development = "${agent-skills-anthropic}/plugins/plugin-dev/skills/agent-development";
         skill-development = "${agent-skills-anthropic}/plugins/plugin-dev/skills/skill-development";
+        command-development = "${agent-skills-anthropic}/plugins/plugin-dev/skills/command-development";
+        hook-development = "${agent-skills-anthropic}/plugins/plugin-dev/skills/hook-development";
+        mcp-integration = "${agent-skills-anthropic}/plugins/plugin-dev/skills/mcp-integration";
         plugin-structure = "${agent-skills-anthropic}/plugins/plugin-dev/skills/plugin-structure";
         plugin-settings = "${agent-skills-anthropic}/plugins/plugin-dev/skills/plugin-settings";
         writing-hookify-rules = "${agent-skills-anthropic}/plugins/hookify/skills/writing-rules";
