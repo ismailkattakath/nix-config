@@ -6,18 +6,9 @@
 # server behind sparfenyuk/mcp-proxy — a launchd USER agent bound to 127.0.0.1,
 # started at login (RunAtLoad) and kept alive. Clients connect over HTTP to a
 # single long-lived process per server: shared memory-graph state, one cache, no
-# duplicate spawns, always up. The personal gateway itself listens on 127.0.0.1
-# only; a SEPARATE proxy (services.mcpGateway.publicServers) publishes a chosen
-# subset through the Mac cloudflared connector behind Cloudflare Access.
-#
-# `desktop-commander` (shell/RCE on this Mac) was historically kept OFF the
-# gateway as a per-client stdio server. That rule was deliberately reversed by
-# the operator so it could be published as an OAuth-gated connector. Understand
-# the tradeoff: Access authenticates the CALLER, which stops other people — it
-# does NOT stop a prompt-injected agent from running commands here with the
-# operator's own valid token, and this host holds the fleet's sole SSH key, the
-# agenix vault, and push access. The config.json guardrails are guardrails, not
-# a boundary (`set_config_value` is client-callable). See publicServers.
+# duplicate spawns, always up. Nothing listens off-box (host is 127.0.0.1 — no
+# tunnel, no Access). `desktop-commander` is deliberately EXCLUDED from the
+# gateway (shell/RCE surface) and stays a per-client stdio server.
 #
 # REQUIREMENT: a launchd USER (GUI) agent lives in the `gui/<uid>` domain, which
 # only exists while that uid has an active GUI login. This targets the flake
@@ -36,8 +27,8 @@
 # CLIENT SIDE (programs.claude-code.mcpServers)
 #   The 10 hosted servers are wired as `type = "http"` (Streamable HTTP — the
 #   current MCP standard; the legacy HTTP+SSE transport was deprecated in the
-#   2025-03-26 spec) pointing at /servers/<name>/mcp — desktop-commander included,
-#   so there is no per-client stdio entry left. The claude-code module writes these into a managed
+#   2025-03-26 spec) pointing at /servers/<name>/mcp; desktop-commander stays
+#   `type = "stdio"`. The claude-code module writes these into a managed
 #   .mcp.json plugin dir — it does NOT clobber the stateful ~/.claude.json.
 #   mcp-proxy serves BOTH /mcp and /sse per server concurrently, so an SSE-only
 #   client (e.g. Grok) just points its OWN config at `endpointFor <name> "sse"`.
@@ -114,22 +105,6 @@ let
         "-y"
         "kapture-mcp"
         "bridge"
-      ];
-    };
-    # Shell/filesystem/process control on THIS Mac. Hosted here (rather than the
-    # per-client stdio server it used to be) so it can be published as an
-    # OAuth-gated connector — an explicit, operator-chosen reversal of the older
-    # "an RCE surface never goes on the gateway" rule. READ services.mcpGateway's
-    # publicServers description before adding it there: Access authenticates the
-    # CALLER, so it stops other people, not a prompt-injected agent acting with
-    # the operator's own token. Its guardrails live in ~/.claude-server-commander/
-    # config.json (desktopCommanderGuardrails, below) and are NOT a boundary —
-    # `set_config_value` is an exposed tool, so a client can widen them at runtime.
-    desktop-commander = {
-      command = npx;
-      args = [
-        "-y"
-        "@wonderwhy-er/desktop-commander@latest"
       ];
     };
   };
@@ -368,11 +343,17 @@ in
     };
 
     # ---- Client side A: Claude Code (home-manager module) ----------------------
-    # desktop-commander is now hosted like every other server (see
-    # customStdioServers), so it arrives via httpEntries and no longer needs a
-    # per-client stdio entry. Consequence: every client shares ONE instance, so
-    # its runtime config (set_config_value) is shared too.
-    programs.claude-code.mcpServers = httpEntries;
+    programs.claude-code.mcpServers = httpEntries // {
+      # NOT hosted — a shell/RCE surface stays a per-client stdio server.
+      desktop-commander = {
+        type = "stdio";
+        command = npx;
+        args = [
+          "-y"
+          "@wonderwhy-er/desktop-commander@latest"
+        ];
+      };
+    };
 
     # ---- Client side B: VS Code (home-manager-managed → pure declarative file) --
     # VS Code is managed here (programs.vscode in modules/shared/home.nix), so its
@@ -408,32 +389,6 @@ in
         ${pkgs.jq}/bin/jq -n --slurpfile m ${claudeDesktopMcpServers} \
           '{ mcpServers: $m[0] }' > "$cfg" && chmod 600 "$cfg"
       fi
-    '';
-
-    # ---- desktop-commander guardrails -----------------------------------------
-    # desktop-commander OWNS this file (it writes defaults on first run and
-    # rewrites it whenever a client calls set_config_value), so we cannot make it
-    # a read-only store symlink — that would break the server. Instead MERGE our
-    # keys with jq, exactly like claudeDesktopMcp above, preserving whatever else
-    # the server keeps in there.
-    #
-    # THESE ARE GUARDRAILS, NOT A SECURITY BOUNDARY. `blockedCommands` is a
-    # command-NAME blocklist: `/usr/bin/security`, `zsh -c '…'`, or a copied
-    # binary all sail past it, and `set_config_value` lets any connected client
-    # rewrite this file at runtime. They exist to stop honest mistakes. The only
-    # real boundary would be OS-level isolation (separate user / VM), which this
-    # host deliberately does not use.
-    home.activation.desktopCommanderGuardrails = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      dc="$HOME/.claude-server-commander/config.json"
-      mkdir -p "$(dirname "$dc")"
-      [ -f "$dc" ] || echo '{}' > "$dc"
-      ${pkgs.jq}/bin/jq '
-        .telemetryEnabled = false
-        | .blockedCommands = ((.blockedCommands // []) + [
-            "security", "ssh", "scp", "sftp", "ssh-add", "ssh-keygen",
-            "agenix", "age", "gh", "glab", "cloudflared", "defaults", "launchctl"
-          ] | unique)
-      ' "$dc" > "$dc.tmp" && mv "$dc.tmp" "$dc" && chmod 600 "$dc"
     '';
   };
 }
