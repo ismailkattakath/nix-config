@@ -139,6 +139,14 @@ in
     claude-code = lib.mkIf pkgs.stdenv.isDarwin {
       enable = true;
       package = claudeCode;
+
+      # Flake-managed GLOBAL skills for Claude Code — the declarative,
+      # reproducible replacement for `npx skills add --global` (which drops a loose
+      # symlink into ~/.claude/skills). Each entry writes ~/.claude/skills/<name>/
+      # at activation from a dir vendored under ./skills, so a `darwin-rebuild
+      # switch` reproduces it on any machine. (Repo-SPECIFIC skills stay in
+      # .claude/skills/ and activate only when working in this repo.)
+      skills.find-skills = ../../skills/find-skills;
     };
 
     git = {
