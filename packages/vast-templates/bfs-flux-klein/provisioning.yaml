@@ -1,0 +1,174 @@
+# bfs-flux-klein-faceswap — Vast native-provisioner manifest for the vastai/comfy image.
+#
+# ComfyUI, the /venv/main venv, and the pre-baked `comfyui` supervisor+Portal service are
+# NOT installed here — the image already ships them. This manifest only: pulls the 3 public
+# HF models (native downloads), clones the 5 REQUIRED custom nodes at pinned commits (native
+# git_repos), then runs ONE gate script (provision-gate.sh, written verbatim below) that owns
+# the entire fail-closed path: assert the pinned SHAs landed, constrained node-pip (so the
+# baked torch/xformers survive), the Civitai LoRA via curl (?token=, follows the signed B2
+# redirect that aria2 403s), fetch+validate the workflow JSON, `sha256sum -c` ALL 4 required
+# models, plant the SSH key (non-fatal), start the pre-baked comfyui service, and health-check
+# :18188. The native provisioner runs post_commands fail-fast, so any non-zero line in the gate
+# aborts and blocks /.provisioning_complete — the whole guarantee rests on that one fact.
+# Tokens (HF_TOKEN / CIVITAI_TOKEN) are Vast ACCOUNT env vars, never in this file.
+version: 1
+
+on_failure:
+  action: stop
+  max_retries: 3
+  retry_delay: 30
+
+auth:
+  huggingface:
+    token_env: HF_TOKEN
+  civitai:
+    token_env: CIVITAI_TOKEN
+
+# Public HF models (native downloader auto-uses $HF_TOKEN; sha-backstopped in the gate).
+# The Civitai LoRA is fetched inside the gate via curl, not here.
+downloads:
+  - url: https://huggingface.co/wikeeyang/Flux2-Klein-9B-True-V1/resolve/main/Flux2-Klein-9B-True-fp8.safetensors
+    dest: /workspace/ComfyUI/models/diffusion_models/flux2Klein9BTrue_v10Fp8.safetensors
+  - url: https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q6_K.gguf
+    dest: /workspace/ComfyUI/models/text_encoders/Qwen3-8B-Q6_K.gguf
+  - url: https://huggingface.co/Comfy-Org/flux2-dev/resolve/main/split_files/vae/flux2-vae.safetensors
+    dest: /workspace/ComfyUI/models/vae/flux2-vae.safetensors
+
+# REQUIRED nodes: clone + pinned ref (full clone -> arbitrary SHA checkout works). pip is done
+# in the gate (fail-fast + torch-constrained), NOT here.
+git_repos:
+  - url: https://github.com/kijai/ComfyUI-KJNodes
+    dest: /workspace/ComfyUI/custom_nodes/comfyui-kjnodes
+    ref: a9ab19d2a7933e03f72bc00103863f06b9483300
+  - url: https://github.com/rgthree/rgthree-comfy
+    dest: /workspace/ComfyUI/custom_nodes/rgthree-comfy
+  - url: https://github.com/1038lab/ComfyUI-QwenVL
+    dest: /workspace/ComfyUI/custom_nodes/ComfyUI-QwenVL
+  - url: https://github.com/city96/ComfyUI-GGUF
+    dest: /workspace/ComfyUI/custom_nodes/comfyui-gguf
+    ref: 6ea2651e7df66d7585f6ffee804b20e92fb38b8a
+  - url: https://github.com/alisson-anjos/ComfyUI-Workarounds
+    dest: /workspace/ComfyUI/custom_nodes/comfyui-workarounds
+    ref: 09ec6a48384c1d16432a732953318bad665706ad
+
+write_files:
+  - path: /workspace/.model-checksums.sha256
+    permissions: "0644"
+    content: |
+      4de8509e7d0b6c43aaf864dfc5cceed13d1408a211494ab0306a1a3ff68b73b2  /workspace/ComfyUI/models/diffusion_models/flux2Klein9BTrue_v10Fp8.safetensors
+      cb042ccd76795a8830d6be6bd4165245847cc68e41797b13bd61aed4c2cfbce6  /workspace/ComfyUI/models/text_encoders/Qwen3-8B-Q6_K.gguf
+      d64f3a68e1cc4f9f4e29b6e0da38a0204fe9a49f2d4053f0ec1fa1ca02f9c4b5  /workspace/ComfyUI/models/vae/flux2-vae.safetensors
+      70d8aaf332d710b905d5085afaa87c3ef577edffd54ffcfadeb8c47a854f9044  /workspace/ComfyUI/models/loras/Klein/head_swap_flux-klein_9b_000003500.safetensors
+  - path: /workspace/provision-gate.sh
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      # THE required fail-closed path. Any non-zero line aborts the post_command phase, which
+      # is fail-fast, so /.provisioning_complete is NOT written on any required failure.
+      set -euo pipefail
+      COMFY=/workspace/ComfyUI
+      PY=/venv/main/bin/python
+      NODES="$COMFY/custom_nodes"
+      command -v "$PY"  >/dev/null 2>&1 || { echo "FATAL: $PY missing"; exit 1; }
+      command -v curl   >/dev/null 2>&1 || { echo "FATAL: curl missing"; exit 1; }
+      command -v git    >/dev/null 2>&1 || { echo "FATAL: git missing"; exit 1; }
+
+      # (1) Assert the pinned node commits actually landed (guards a native shallow/unpinned clone).
+      assert_sha() {
+        local got
+        got="$(git -C "$NODES/$1" rev-parse HEAD 2>/dev/null || true)"
+        [ "$got" = "$2" ] || { echo "FATAL: pin mismatch $1: want $2 got ${got:-none}"; exit 1; }
+      }
+      assert_sha comfyui-kjnodes     a9ab19d2a7933e03f72bc00103863f06b9483300
+      assert_sha comfyui-gguf        6ea2651e7df66d7585f6ffee804b20e92fb38b8a
+      assert_sha comfyui-workarounds 09ec6a48384c1d16432a732953318bad665706ad
+
+      # (2) Required-node pip — fail-fast, constrained so the baked torch/xformers/etc survive.
+      "$PY" - <<'PYEOF' >/workspace/pip-constraints.txt
+      import importlib.metadata as m
+      for p in ("torch", "torchvision", "torchaudio", "xformers"):
+          try:
+              print(f"{p}=={m.version(p)}")
+          except m.PackageNotFoundError:
+              pass
+      PYEOF
+      for d in comfyui-kjnodes rgthree-comfy ComfyUI-QwenVL comfyui-gguf; do
+        if [ -f "$NODES/$d/requirements.txt" ]; then
+          "$PY" -m pip install --no-cache-dir -c /workspace/pip-constraints.txt -r "$NODES/$d/requirements.txt"
+        fi
+      done
+      "$PY" -m pip install --no-cache-dir -c /workspace/pip-constraints.txt gguf
+
+      # (2b) OPTIONAL nodes + ComfyUI-Manager + legacy aliases — NON-FATAL.
+      optional_extras() {
+        set +e
+        clone_opt() {
+          local url="$1" dir="$2" commit="$3"
+          [ -d "$NODES/$dir/.git" ] || git clone --quiet "$url" "$NODES/$dir" || return 0
+          [ -n "$commit" ] && git -C "$NODES/$dir" checkout --quiet "$commit"
+          [ -f "$NODES/$dir/requirements.txt" ] && \
+            "$PY" -m pip install --no-cache-dir -c /workspace/pip-constraints.txt -r "$NODES/$dir/requirements.txt"
+          return 0
+        }
+        clone_opt https://github.com/pythongosssss/ComfyUI-Custom-Scripts comfyui-custom-scripts ""
+        clone_opt https://github.com/TinyTerra/ComfyUI_tinyterraNodes      comfyui_tinyterranodes ""
+        clone_opt https://github.com/MoonGoblinDev/Civicomfy               civicomfy 555e984bbcb02fc955075cb8eb699a6884c51239
+        clone_opt https://github.com/ltdrdata/ComfyUI-Manager              comfyui-manager ""
+        cd "$NODES" || return 0
+        local a legacy canon
+        for a in ComfyUI-KJNodes:comfyui-kjnodes ComfyUI-GGUF:comfyui-gguf \
+                 ComfyUI-Workarounds:comfyui-workarounds ComfyUI-Custom-Scripts:comfyui-custom-scripts \
+                 ComfyUI_tinyterraNodes:comfyui_tinyterranodes Civicomfy:civicomfy comfyui-qwenvl:ComfyUI-QwenVL; do
+          legacy="${a%%:*}"; canon="${a##*:}"
+          [ -d "$canon" ] && [ ! -e "$legacy" ] && ln -sf "$canon" "$legacy"
+        done
+      }
+      optional_extras || true
+
+      # (3) Civitai LoRA via curl (?token=, follows the signed B2 redirect that aria2 403s).
+      LORA="$COMFY/models/loras/Klein/head_swap_flux-klein_9b_000003500.safetensors"
+      mkdir -p "$(dirname "$LORA")"
+      if [ ! -s "$LORA" ]; then
+        : "${CIVITAI_TOKEN:?FATAL: CIVITAI_TOKEN not in instance env}"
+        curl -fL --retry 5 --retry-delay 3 --connect-timeout 30 --max-time 3600 \
+          -o "$LORA" "https://civitai.com/api/download/models/2610018?token=${CIVITAI_TOKEN}"
+      fi
+
+      # (4) Workflow — fetched from the pinned WORKFLOW_URL (env, injected by vast-template-apply
+      #     so it carries the flake rev). Validate it is real JSON, not an HTML/404 body.
+      WF="$COMFY/user/default/workflows/BFS_FluxKlein9b_FaceSwap.json"
+      mkdir -p "$(dirname "$WF")"
+      curl -fL --retry 5 -o "$WF" "${WORKFLOW_URL:?FATAL: WORKFLOW_URL not set}"
+      "$PY" -c "import json,sys; json.load(open('$WF'))"
+
+      # (5) THE INTEGRITY GATE — all 4 REQUIRED models, after every download.
+      sha256sum -c /workspace/.model-checksums.sha256
+
+      # (6) SSH key plant — NON-FATAL (Instance Portal is the primary access path).
+      plant_ssh() {
+        local k
+        k="$(printf '%s' "${SSH_PUBKEY_B64:-}" | base64 -d 2>/dev/null || true)"
+        [ -n "$k" ] || { echo "WARN: no/invalid SSH_PUBKEY_B64 (non-fatal)"; return 0; }
+        printf '%s\n' "$k" | ssh-keygen -lf /dev/stdin >/dev/null 2>&1 || { echo "WARN: SSH_PUBKEY_B64 not a valid key (non-fatal)"; return 0; }
+        mkdir -p /root/.ssh && chmod 700 /root/.ssh
+        grep -qxF "$k" /root/.ssh/authorized_keys 2>/dev/null || printf '%s\n' "$k" >>/root/.ssh/authorized_keys
+        chmod 600 /root/.ssh/authorized_keys
+      }
+      plant_ssh || true
+
+      # (7) Start the PRE-BAKED comfyui supervisor service (image sets --disable-auto-launch).
+      SVC="supervisorctl -c /etc/supervisor/supervisord.conf"
+      $SVC start comfyui || $SVC status comfyui | grep -q RUNNING
+
+      # (8) Health gate — completion requires ComfyUI actually serving on :18188.
+      for _ in $(seq 1 90); do
+        curl -sf -o /dev/null http://127.0.0.1:18188/ && { echo "PROVISION-OUTCOME: ok (bfs-flux-klein on vastai/comfy)"; exit 0; }
+        sleep 2
+      done
+      echo "FATAL: comfyui health-check failed on :18188"
+      exit 1
+
+# The single REQUIRED post_command: run the gate. Fail-fast phase -> a non-zero gate blocks
+# the completion sentinel. Everything fatal lives in the gate; the trust surface is one fact.
+post_commands:
+  - bash /workspace/provision-gate.sh
