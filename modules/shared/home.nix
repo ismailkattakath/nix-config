@@ -236,6 +236,14 @@ let
         # Sentinel = "index consulted, every listed secret attempted". Set on a
         # readable index even if empty (nothing to load is a valid loaded state)
         # and EXPORTED so descendants skip this whole block.
+        #
+        # CAVEAT (by design): the sentinel is per-secret-set, not per-secret. If a
+        # child shell drops a single var (`unset FOO`, or is spawned with
+        # `env -u FOO`), this loader will NOT restore it — the inherited sentinel
+        # short-circuits the whole block. To get FOO back, either open a shell
+        # without the sentinel, or force a reload in place:
+        #   unset __SECRETS_KEYCHAIN_LOADED && source ~/.config/secrets/loader.sh
+        # (a fresh login shell / new process tree always reloads from scratch).
         export __SECRETS_KEYCHAIN_LOADED=1
         # Non-interactive bash's only startup hook is $BASH_ENV — propagate it so
         # bash descendants of this (possibly zsh) shell also self-load / short-circuit.
@@ -248,10 +256,17 @@ let
     fi
 
     # -- interactive helpers (defined always; touch the Keychain only if called) --
-    # Persist to the Keychain, then apply to THIS shell right away.
+    # Persist to (or remove from) the Keychain, then apply the change to THIS
+    # shell right away (a bare binary can't mutate its parent's env): an add
+    # re-exports the value, a --remove unsets it here too.
     set-secret() {
       command set-secret "$@" || return
       case "''${1:-}" in
+        --remove | -r)
+          case "''${2:-}" in
+            [A-Za-z_]*) unset "$2" 2>/dev/null || true ;;
+          esac
+          ;;
         [A-Za-z_]*)
           export "$1=$(/usr/bin/security find-generic-password -a "$(/usr/bin/id -un)" -s "$1" -w 2>/dev/null)"
           ;;
